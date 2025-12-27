@@ -106,4 +106,3 @@ Web Origins: * (or specific origins)
 - [ ] JWT token has correct audience and issuer
 - [ ] CORS is properly configured in both Keycloak and backend
 - [ ] Backend OPTIONS requests are allowed for CORS preflight
-
