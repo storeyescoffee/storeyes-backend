@@ -18,14 +18,39 @@ If you get a 403 error when trying to authenticate with Keycloak, check your Key
 
 ### 2. 403 Error from Backend API
 
+**⚠️ IMPORTANT: The backend is verified working (tested with curl). If you're getting 403 from frontend, see [FRONTEND_DEBUGGING.md](./FRONTEND_DEBUGGING.md) for detailed troubleshooting steps.**
+
 If you get a 403 when calling your backend API:
 
 **Check JWT Token:**
 
-- Is the token being sent in the `Authorization: Bearer <token>` header?
+- Is the token being sent in the `Authorization: Bearer <token>` header? ✅ **REQUIRED FORMAT**
 - Is the token expired? (Check the `exp` claim)
-- Does the token have the correct `audience`? (Should be `storeyes-mobile`)
+- Does the token have the correct `audience`? (Should be `storeyes-mobile` or `azp` claim should match)
 - Does the token have the correct `issuer`? (Should be `http://15.216.37.183/realms/storeyes`)
+
+**Frontend Requirements (CRITICAL):**
+
+✅ **MUST use Authorization header:**
+
+```javascript
+headers: {
+  'Authorization': `Bearer ${accessToken}`,  // Space after "Bearer" is required
+  'Content-Type': 'application/json'
+}
+```
+
+❌ **DO NOT use:**
+
+- Query parameters: `?token=...`
+- Custom headers: `X-Auth-Token`, `X-Access-Token`, etc.
+- Cookie-based auth (unless specifically configured)
+
+**Token Handling:**
+
+- Use `access_token` from Keycloak token response (not `token` or `id_token`)
+- Handle 401 responses (token expired) by refreshing the token
+- Store token securely (localStorage, secure storage, or memory)
 
 **Check Backend Logs:**
 
@@ -97,12 +122,58 @@ Web Origins: * (or specific origins)
    - Realm Settings → Security → Require SSL: `none` (for HTTP)
    - Realm Settings → Login → Verify email: `OFF` (if not needed)
 
+## Frontend Integration Example
+
+Here's a complete example of how to properly call the API from frontend:
+
+```javascript
+async function callAPI(endpoint, method = "GET", body = null) {
+  const accessToken = getAccessToken(); // Retrieve from storage
+
+  if (!accessToken) {
+    throw new Error("No access token available");
+  }
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`, // ✅ CRITICAL: Use this exact format
+    "Content-Type": "application/json",
+  };
+
+  const config = {
+    method: method,
+    headers: headers,
+  };
+
+  if (body) {
+    config.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(`https://api.storeyes.io${endpoint}`, config);
+
+  // Handle token expiration
+  if (response.status === 401) {
+    const newToken = await refreshAccessToken();
+    headers["Authorization"] = `Bearer ${newToken}`;
+    return await fetch(`https://api.storeyes.io${endpoint}`, config);
+  }
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status} ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+```
+
 ## Quick Checklist
 
 - [ ] User account has no required actions in Keycloak
 - [ ] Keycloak client has correct redirect URIs configured
 - [ ] Keycloak client has Direct Access Grants enabled (for password flow)
 - [ ] Backend can reach Keycloak JWKS endpoint
-- [ ] JWT token has correct audience and issuer
+- [ ] JWT token has correct audience (aud="account" with azp="storeyes-mobile" is valid)
+- [ ] **Frontend uses `Authorization: Bearer <token>` header format**
+- [ ] **Frontend uses `access_token` from Keycloak response (not id_token)**
 - [ ] CORS is properly configured in both Keycloak and backend
 - [ ] Backend OPTIONS requests are allowed for CORS preflight
+- [ ] Frontend handles 401 responses and refreshes tokens
