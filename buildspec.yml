@@ -7,8 +7,9 @@ phases:
   build:
     commands:
       - mvn clean package -DskipTests
+      - mkdir -p backend
+      - mv target/*.jar backend/app.jar
 artifacts:
   files:
-    - target/*.jar
-    - appspec.yml
+    - backend/app.jar
     - scripts/**

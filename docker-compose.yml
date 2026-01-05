@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  backend:
+    image: eclipse-temurin:21-jre-alpine
+    container_name: storeyes-backend
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    command: java -jar /app/app.jar
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - SERVER_PORT=${SERVER_PORT:-8443}
+      - HTTP_PORT=${HTTP_PORT:-8080}
+      - KEYCLOAK_ISSUER_URI=${KEYCLOAK_ISSUER_URI:-http://15.216.37.183/realms/storeyes}
+      - KEYCLOAK_JWKS_URI=${KEYCLOAK_JWKS_URI:-http://15.216.37.183/realms/storeyes/protocol/openid-connect/certs}
+      - KEYCLOAK_AUDIENCE=${KEYCLOAK_AUDIENCE:-storeyes-mobile}
+      - SSL_KEYSTORE_PATH=${SSL_KEYSTORE_PATH:-classpath:keystore.p12}
+      - SSL_KEYSTORE_PASSWORD=${SSL_KEYSTORE_PASSWORD:-sahtout@2026}
+      - SSL_KEYSTORE_TYPE=${SSL_KEYSTORE_TYPE:-PKCS12}
+      - SSL_KEY_ALIAS=${SSL_KEY_ALIAS:-storeyes-blue}
+    restart: unless-stopped
+    networks:
+      - storeyes-network
+
+
+networks:
+  storeyes-network:
+    driver: bridge
+
