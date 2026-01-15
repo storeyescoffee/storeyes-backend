@@ -13,13 +13,20 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "date_dimensions")
+@Table(
+    name = "date_dimensions",
+    indexes = {
+        @Index(name = "idx_date_dimensions_date", columnList = "date"),
+        @Index(name = "idx_date_dimensions_year_month", columnList = "year,month")
+    }
+)
 public class DateDimension {
     
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "date_dimension_id_seq")
     @SequenceGenerator(name = "date_dimension_id_seq", sequenceName = "date_dimension_id_seq", allocationSize = 1)
+    @Column(name = "id", columnDefinition = "BIGINT DEFAULT nextval('date_dimension_id_seq')")
     private Long id;
 
     @Column(name = "date", nullable = false)

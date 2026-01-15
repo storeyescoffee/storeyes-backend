@@ -1,12 +1,14 @@
 package io.storeyes.storeyes_coffee.alerts.controllers;
 
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDTO;
+import io.storeyes.storeyes_coffee.alerts.dto.AlertSummaryDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.CreateAlertRequest;
 import io.storeyes.storeyes_coffee.alerts.dto.UpdateHumanJudgementRequest;
 import io.storeyes.storeyes_coffee.alerts.dto.UpdateSecondaryVideoRequest;
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
 import io.storeyes.storeyes_coffee.alerts.services.AlertService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -33,22 +35,18 @@ public class AlertController {
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
     
-    /**
-     * Get alerts by date and processed status
-     * GET /api/alerts - returns all processed alerts by default
-     * GET /api/alerts?unprocessed=true - returns all unprocessed alerts
-     * GET /api/alerts?date=2025-12-08T10:00:00 - returns processed alerts for the date
-     * GET /api/alerts?date=2025-12-08T00:00:00&endDate=2025-12-08T23:59:59 - returns processed alerts in date range
-     * GET /api/alerts?date=2025-12-08T10:00:00&unprocessed=true - returns unprocessed alerts for the date
-     */
+
     @GetMapping
     public ResponseEntity<List<Alert>> getAlertsByDate(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            @RequestParam(required = false) Boolean unprocessed) {
-        List<Alert> alerts = alertService.getAlertsByDate(date, endDate, unprocessed);
+            @RequestParam(required = false) Boolean unprocessed,
+            @RequestParam(required = false) Long store_id) {
+        List<Alert> alerts = alertService.getAlertsByDate(date, endDate, unprocessed, store_id);
         return ResponseEntity.ok(alerts);
     }
+
+    
 
     
     
@@ -106,6 +104,22 @@ public class AlertController {
     @GetMapping("/all")
     public ResponseEntity<List<AlertDTO>> getAllAlerts() {
         List<AlertDTO> alerts = alertService.getAllAlerts();
+        return ResponseEntity.ok(alerts);
+    }
+    
+    /**
+     * Get alert summaries (alertId and alertDate) for today by user_id
+     * GET /api/alerts/today?user_id={userId}
+     * 
+     * Query Parameters:
+     * - user_id: User ID (Keycloak user ID) - required
+     * 
+     * Returns alerts for today for the store owned by the user
+     */
+    @GetMapping("/today")
+    public ResponseEntity<List<AlertSummaryDTO>> getTodayAlerts(
+            @RequestParam @NotNull(message = "user_id is required") String user_id) {
+        List<AlertSummaryDTO> alerts = alertService.getTodayAlertsByUserId(user_id);
         return ResponseEntity.ok(alerts);
     }
 }

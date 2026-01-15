@@ -1,11 +1,15 @@
 package io.storeyes.storeyes_coffee.alerts.services;
 
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDTO;
+import io.storeyes.storeyes_coffee.alerts.dto.AlertSummaryDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.CreateAlertRequest;
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
 import io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement;
 import io.storeyes.storeyes_coffee.alerts.mappers.AlertMapper;
 import io.storeyes.storeyes_coffee.alerts.repositories.AlertRepository;
+import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,17 +25,24 @@ public class AlertService {
     
     private final AlertRepository alertRepository;
     private final AlertMapper alertMapper;
+    private final StoreRepository storeRepository;
+    private final StoreService storeService;
     
     /**
      * Create a new alert
      * If an alert with the same alertDate already exists, ignores it without creating a duplicate
      */
     public void createAlert(CreateAlertRequest request) {
+        // Get store by code
+        var store = storeRepository.findByCode(request.getStoreCode())
+                .orElseThrow(() -> new RuntimeException("Store not found with code: " + request.getStoreCode()));
+        
         // Check if an alert with the same alertDate already exists
         if (alertRepository.findByExactAlertDate(request.getAlertDate()).isEmpty()) {
             // No existing alert found, create a new one
             Alert alert = Alert.builder()
                     .alertDate(request.getAlertDate())
+                    .store(store)
                     .mainVideoUrl(request.getMainVideoUrl())
                     .productName(request.getProductName())
                     .imageUrl(request.getImageUrl())
@@ -45,9 +57,19 @@ public class AlertService {
      * Get alerts by date and processed status (supports both exact date and date range)
      * By default returns processed alerts, unless unprocessed=true
      * If date is not provided, defaults to today's date
+     * Optionally filters by store_id if provided, otherwise uses authenticated user's store
      */
-    public List<Alert> getAlertsByDate(LocalDateTime date, LocalDateTime endDate, Boolean unprocessed) {
+    public List<Alert> getAlertsByDate(LocalDateTime date, LocalDateTime endDate, Boolean unprocessed, Long storeId) {
         boolean filterUnprocessed = Boolean.TRUE.equals(unprocessed);
+        
+        // If storeId is not provided, get it from the authenticated user's store
+        if (storeId == null) {
+            String userId = KeycloakTokenUtils.getUserId();
+            if (userId == null) {
+                throw new RuntimeException("User is not authenticated");
+            }
+            storeId = storeService.getStoreByOwnerId(userId).getId();
+        }
         
         // Default to today's date if not provided
         if (date == null) {
@@ -57,17 +79,33 @@ public class AlertService {
         // Date filter is provided (or defaulted to today)
         if (endDate != null) {
             // Date range provided
-            if (filterUnprocessed) {
-                return alertRepository.findUnprocessedByAlertDateBetween(date, endDate);
+            if (storeId != null) {
+                if (filterUnprocessed) {
+                    return alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
+                } else {
+                    return alertRepository.findProcessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
+                }
             } else {
-                return alertRepository.findProcessedByAlertDateBetween(date, endDate);
+                if (filterUnprocessed) {
+                    return alertRepository.findUnprocessedByAlertDateBetween(date, endDate);
+                } else {
+                    return alertRepository.findProcessedByAlertDateBetween(date, endDate);
+                }
             }
         } else {
             // Exact date provided (or defaulted to today)
-            if (filterUnprocessed) {
-                return alertRepository.findUnprocessedByAlertDate(date);
+            if (storeId != null) {
+                if (filterUnprocessed) {
+                    return alertRepository.findUnprocessedByAlertDateAndStoreId(date, storeId);
+                } else {
+                    return alertRepository.findProcessedByAlertDateAndStoreId(date, storeId);
+                }
             } else {
-                return alertRepository.findProcessedByAlertDate(date);
+                if (filterUnprocessed) {
+                    return alertRepository.findUnprocessedByAlertDate(date);
+                } else {
+                    return alertRepository.findProcessedByAlertDate(date);
+                }
             }
         }
     }
@@ -106,6 +144,29 @@ public class AlertService {
         LocalDateTime now = LocalDateTime.now();
         int updated = alertRepository.updateSecondaryVideoAndMarkProcessed(alertId, secondaryVideoUrl, imageUrl, now);
         return updated > 0;
+    }
+    
+    /**
+     * Get alert summaries (alertId and alertDate) for today by user_id
+     * Returns alerts for the store owned by the user
+     */
+    public List<AlertSummaryDTO> getTodayAlertsByUserId(String userId) {
+        // Get store by owner_id (user_id)
+        Long storeId = storeService.getStoreByOwnerId(userId).getId();
+        
+        // Get today's date
+        LocalDateTime today = LocalDate.now().atStartOfDay();
+        
+        // Find alerts for today and store
+        List<Alert> alerts = alertRepository.findByTodayAndStoreId(today, storeId);
+        
+        // Map to summary DTO
+        return alerts.stream()
+                .map(alert -> AlertSummaryDTO.builder()
+                        .alertId(alert.getId())
+                        .alertDate(alert.getAlertDate())
+                        .build())
+                .collect(Collectors.toList());
     }
 }
 

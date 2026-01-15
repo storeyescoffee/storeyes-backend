@@ -68,6 +68,15 @@ public class StoreService {
     }
     
     /**
+     * Get store by owner ID (Keycloak user ID)
+     */
+    public StoreDTO getStoreByOwnerId(String ownerId) {
+        Store store = storeRepository.findByOwner_Id(ownerId)
+                .orElseThrow(() -> new RuntimeException("Store not found for owner with id: " + ownerId));
+        return storeMapper.toDTO(store);
+    }
+    
+    /**
      * Get paginated stores with filtering using JPA Specifications
      */
     public PaginatedResponse<StoreDTO> getStores(StoreFilterDto filter, int page, int size, String sortBy, String sortDir) {

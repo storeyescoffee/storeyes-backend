@@ -17,5 +17,8 @@ public class CreateAlertRequest {
     private String productName;
     
     private String imageUrl;
+
+    @NotNull(message = "Store code is required")
+    private String storeCode;
 }
 

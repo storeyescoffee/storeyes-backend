@@ -13,12 +13,21 @@ import io.storeyes.storeyes_coffee.store.entities.Store;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "fact_kpi_hourly")
+@Table(
+    name = "fact_kpi_hourly",
+    indexes = {
+        @Index(name = "idx_fact_kpi_hourly_store", columnList = "store_id"),
+        @Index(name = "idx_fact_kpi_hourly_date", columnList = "date_id"),
+        @Index(name = "idx_fact_kpi_hourly_store_date", columnList = "store_id,date_id"),
+        @Index(name = "idx_fact_kpi_hourly_hour", columnList = "hour")
+    }
+)
 public class FactKpiHourly {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "fact_kpi_hourly_id_seq")
     @SequenceGenerator(name = "fact_kpi_hourly_id_seq", sequenceName = "fact_kpi_hourly_id_seq", allocationSize = 1)
+    @Column(name = "id", columnDefinition = "BIGINT DEFAULT nextval('fact_kpi_hourly_id_seq')")
     private Long id;
 
     @ManyToOne

@@ -9,6 +9,8 @@ import lombok.Builder;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import io.storeyes.storeyes_coffee.store.entities.Store;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,6 +28,12 @@ public class Alert {
     @Column(name = "alert_date", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime alertDate;
+
+
+    @ManyToOne
+    @JoinColumn(name = "store_id", nullable = false, columnDefinition = "1")
+    private Store store;
+
 
     @Column(name = "video_url", nullable = false, length = 1024)
     private String mainVideoUrl;

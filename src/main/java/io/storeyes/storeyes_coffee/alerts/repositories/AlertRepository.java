@@ -59,6 +59,34 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
         LocalDateTime endDate
     );
     
+    // Find processed alerts by exact date (day) and store ID
+    @Query("SELECT a FROM Alert a WHERE DATE(a.alertDate) = DATE(:date) AND a.isProcessed = true AND a.store.id = :storeId ORDER BY a.alertDate DESC")
+    List<Alert> findProcessedByAlertDateAndStoreId(LocalDateTime date, Long storeId);
+    
+    // Find unprocessed alerts by exact date (day) and store ID
+    @Query("SELECT a FROM Alert a WHERE DATE(a.alertDate) = DATE(:date) AND a.isProcessed = false AND a.store.id = :storeId ORDER BY a.alertDate DESC")
+    List<Alert> findUnprocessedByAlertDateAndStoreId(LocalDateTime date, Long storeId);
+    
+    // Find processed alerts within a date range and store ID
+    @Query("SELECT a FROM Alert a WHERE a.alertDate >= :startDate AND a.alertDate <= :endDate AND a.isProcessed = true AND a.store.id = :storeId ORDER BY a.alertDate DESC")
+    List<Alert> findProcessedByAlertDateBetweenAndStoreId(
+        LocalDateTime startDate,
+        LocalDateTime endDate,
+        Long storeId
+    );
+    
+    // Find unprocessed alerts within a date range and store ID
+    @Query("SELECT a FROM Alert a WHERE a.alertDate >= :startDate AND a.alertDate <= :endDate AND a.isProcessed = false AND a.store.id = :storeId ORDER BY a.alertDate DESC")
+    List<Alert> findUnprocessedByAlertDateBetweenAndStoreId(
+        LocalDateTime startDate,
+        LocalDateTime endDate,
+        Long storeId
+    );
+    
+    // Find alerts by today's date and store ID
+    @Query("SELECT a FROM Alert a WHERE DATE(a.alertDate) = DATE(:today) AND a.store.id = :storeId AND a.isProcessed = false ORDER BY a.alertDate")
+    List<Alert> findByTodayAndStoreId(LocalDateTime today, Long storeId);
+    
     // Update human judgement directly via query
     @Modifying
     @Query("UPDATE Alert a SET a.humanJudgement = :judgement, a.updatedAt = :updatedAt WHERE a.id = :id")
