@@ -1,9 +1,9 @@
-package io.storeyes.storeyes_coffee.auth.services;
+package io.storeyes.storeyes_coffee.alerts.auth.services;
 
-import io.storeyes.storeyes_coffee.auth.dto.AuthResponse;
-import io.storeyes.storeyes_coffee.auth.dto.UserInfoDTO;
-import io.storeyes.storeyes_coffee.auth.entities.UserInfo;
-import io.storeyes.storeyes_coffee.auth.repositories.UserInfoRepository;
+import io.storeyes.storeyes_coffee.alerts.auth.dto.AuthResponse;
+import io.storeyes.storeyes_coffee.alerts.auth.dto.UserInfoDTO;
+import io.storeyes.storeyes_coffee.alerts.auth.entities.UserInfo;
+import io.storeyes.storeyes_coffee.alerts.auth.repositories.UserInfoRepository;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;

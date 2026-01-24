@@ -4,7 +4,7 @@ services:
     container_name: storeyes-backend
     working_dir: /app
     volumes:
-      - ./backend:/app
+      - /opt/storeyes/backend:/app
     command: java -jar /app/app.jar
     ports:
       - "8080:8080"
@@ -27,19 +27,7 @@ services:
     restart: unless-stopped
     networks:
       - storeyes-network
-  mediamtx:
-    image: bluenviron/mediamtx:latest
-    container_name: mediamtx
-    restart: unless-stopped
 
-    ports:
-      - "8554:8554"
-      - "1935:1935"
-      - "8888:8888"
-    volumes:
-      - ./mediamtx.yml:/mediamtx.yml:ro
-    networks:
-      - storeyes-network
 
 networks:
   storeyes-network:

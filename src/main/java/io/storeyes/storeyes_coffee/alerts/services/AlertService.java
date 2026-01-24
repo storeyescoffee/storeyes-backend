@@ -147,13 +147,10 @@ public class AlertService {
     }
     
     /**
-     * Get alert summaries (alertId and alertDate) for today by user_id
-     * Returns alerts for the store owned by the user
+     * Get alert summaries (alertId and alertDate) for today by store_id
+     * Returns alerts for today for the specified store
      */
-    public List<AlertSummaryDTO> getTodayAlertsByUserId(String userId) {
-        // Get store by owner_id (user_id)
-        Long storeId = storeService.getStoreByOwnerId(userId).getId();
-        
+    public List<AlertSummaryDTO> getTodayAlertsByStoreId(Long storeId) {
         // Get today's date
         LocalDateTime today = LocalDate.now().atStartOfDay();
         

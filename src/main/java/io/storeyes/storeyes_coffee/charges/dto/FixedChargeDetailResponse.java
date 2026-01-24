@@ -13,7 +13,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-@EqualsAndHashCode(callSuper = false)
 public class FixedChargeDetailResponse extends FixedChargeResponse {
     private BigDecimal previousAmount;
     private String notes;

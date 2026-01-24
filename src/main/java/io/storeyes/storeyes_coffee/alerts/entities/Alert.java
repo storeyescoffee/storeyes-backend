@@ -31,7 +31,7 @@ public class Alert {
 
 
     @ManyToOne
-    @JoinColumn(name = "store_id", nullable = false, columnDefinition = "1")
+    @JoinColumn(name = "store_id", nullable = false, columnDefinition = "BIGINT DEFAULT 1")
     private Store store;
 
 

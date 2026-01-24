@@ -1,4 +1,4 @@
-package io.storeyes.storeyes_coffee.auth.config;
+package io.storeyes.storeyes_coffee.alerts.auth.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

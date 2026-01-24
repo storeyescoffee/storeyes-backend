@@ -1,4 +1,4 @@
-package io.storeyes.storeyes_coffee.auth.dto;
+package io.storeyes.storeyes_coffee.alerts.auth.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

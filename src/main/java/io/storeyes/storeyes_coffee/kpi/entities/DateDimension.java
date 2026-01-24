@@ -26,7 +26,6 @@ public class DateDimension {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "date_dimension_id_seq")
     @SequenceGenerator(name = "date_dimension_id_seq", sequenceName = "date_dimension_id_seq", allocationSize = 1)
-    @Column(name = "id", columnDefinition = "BIGINT DEFAULT nextval('date_dimension_id_seq')")
     private Long id;
 
     @Column(name = "date", nullable = false)

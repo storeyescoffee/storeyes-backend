@@ -108,18 +108,18 @@ public class AlertController {
     }
     
     /**
-     * Get alert summaries (alertId and alertDate) for today by user_id
-     * GET /api/alerts/today?user_id={userId}
+     * Get alert summaries (alertId and alertDate) for today by store_id
+     * GET /api/alerts/today?store_id={storeId}
      * 
      * Query Parameters:
-     * - user_id: User ID (Keycloak user ID) - required
+     * - store_id: Store ID - required
      * 
-     * Returns alerts for today for the store owned by the user
+     * Returns alerts for today for the specified store
      */
     @GetMapping("/today")
     public ResponseEntity<List<AlertSummaryDTO>> getTodayAlerts(
-            @RequestParam @NotNull(message = "user_id is required") String user_id) {
-        List<AlertSummaryDTO> alerts = alertService.getTodayAlertsByUserId(user_id);
+            @RequestParam @NotNull(message = "store_id is required") Long store_id) {
+        List<AlertSummaryDTO> alerts = alertService.getTodayAlertsByStoreId(store_id);
         return ResponseEntity.ok(alerts);
     }
 }

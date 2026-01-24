@@ -1,4 +1,4 @@
-package io.storeyes.storeyes_coffee.auth.entities;
+package io.storeyes.storeyes_coffee.alerts.auth.entities;
 
 import jakarta.persistence.*;
 import lombok.Data;

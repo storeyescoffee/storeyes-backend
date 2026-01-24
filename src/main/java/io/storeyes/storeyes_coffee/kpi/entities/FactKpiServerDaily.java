@@ -29,7 +29,6 @@ public class FactKpiServerDaily {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "fact_kpi_server_daily_id_seq")
     @SequenceGenerator(name = "fact_kpi_server_daily_id_seq", sequenceName = "fact_kpi_server_daily_id_seq", allocationSize = 1)
-    @Column(name = "id", columnDefinition = "BIGINT DEFAULT nextval('fact_kpi_server_daily_id_seq')")
     private Long id;
 
     @ManyToOne

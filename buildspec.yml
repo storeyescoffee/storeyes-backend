@@ -11,7 +11,6 @@ phases:
       - mv target/*.jar backend/app.jar
 artifacts:
   files:
-    - backend/app.jar
+    - backend/**
     - scripts/**
     - docker-compose.yml
-    - mediamtx.yml
