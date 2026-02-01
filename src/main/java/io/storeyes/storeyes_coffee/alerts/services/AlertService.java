@@ -1,6 +1,7 @@
 package io.storeyes.storeyes_coffee.alerts.services;
 
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDTO;
+import io.storeyes.storeyes_coffee.alerts.dto.AlertDetailsDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.AlertSummaryDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.CreateAlertRequest;
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
@@ -181,6 +182,20 @@ public class AlertService {
                         .alertDate(alert.getAlertDate())
                         .build())
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get alert details with sales by alert ID
+     * Uses JOIN FETCH to avoid N+1 query problem
+     * @param id Alert ID
+     * @return AlertDetailsDTO with sales
+     */
+    public AlertDetailsDTO getAlertDetailsWithSales(Long id) {
+        Alert alert = alertRepository.findByIdWithSales(id)
+                .orElseThrow(() -> new RuntimeException("Alert not found with id: " + id));
+        
+        // Use mapper to convert Alert to AlertDetailsDTO
+        return alertMapper.toDetailsDTO(alert);
     }
 }
 

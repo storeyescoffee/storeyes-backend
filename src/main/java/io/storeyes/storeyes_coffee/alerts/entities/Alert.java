@@ -2,6 +2,8 @@ package io.storeyes.storeyes_coffee.alerts.entities;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -9,6 +11,7 @@ import lombok.Builder;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import io.storeyes.storeyes_coffee.sales.entities.Sales;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 
 @Data
@@ -67,6 +70,9 @@ public class Alert {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
+    @OneToMany(mappedBy = "alert", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @Builder.Default
+    private List<Sales> sales = new ArrayList<>();
 
     @PrePersist
     public void prePersist() {

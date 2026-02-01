@@ -92,6 +92,18 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     @Query("SELECT a FROM Alert a WHERE DATE(a.alertDate) = :date AND a.store.id = :storeId ORDER BY a.alertDate DESC")
     List<Alert> findByAlertDateAndStoreId(LocalDate date, Long storeId);
     
+    // Find all alerts by exact date (day) and store ID ordered by alertDate ascending (chronologically)
+    @Query("SELECT a FROM Alert a WHERE DATE(a.alertDate) = :date AND a.store.id = :storeId ORDER BY a.alertDate ASC")
+    List<Alert> findByAlertDateAndStoreIdOrderByAlertDateAsc(LocalDate date, Long storeId);
+    
+    // Find all alerts by store ID ordered by alertDate ascending (chronologically)
+    @Query("SELECT a FROM Alert a WHERE a.store.id = :storeId ORDER BY a.alertDate ASC")
+    List<Alert> findByStoreIdOrderByAlertDateAsc(Long storeId);
+    
+    // Find alert by ID with sales (using JOIN FETCH to avoid N+1 query problem)
+    @Query("SELECT DISTINCT a FROM Alert a LEFT JOIN FETCH a.sales s WHERE a.id = :id ORDER BY s.soldAt DESC")
+    Optional<Alert> findByIdWithSales(Long id);
+    
     // Update human judgement directly via query
     @Modifying
     @Query("UPDATE Alert a SET a.humanJudgement = :judgement, a.updatedAt = :updatedAt WHERE a.id = :id")

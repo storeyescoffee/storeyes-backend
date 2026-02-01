@@ -1,14 +1,13 @@
 package io.storeyes.storeyes_coffee.alerts.controllers;
 
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDTO;
-import io.storeyes.storeyes_coffee.alerts.dto.AlertSummaryDTO;
+import io.storeyes.storeyes_coffee.alerts.dto.AlertDetailsDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.CreateAlertRequest;
 import io.storeyes.storeyes_coffee.alerts.dto.UpdateHumanJudgementRequest;
 import io.storeyes.storeyes_coffee.alerts.dto.UpdateSecondaryVideoRequest;
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
 import io.storeyes.storeyes_coffee.alerts.services.AlertService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -95,6 +94,17 @@ public class AlertController {
     public ResponseEntity<Alert> getAlertById(@PathVariable Long id) {
         Alert alert = alertService.getAlertById(id);
         return ResponseEntity.ok(alert);
+    }
+    
+    /**
+     * Get alert details with sales by ID
+     * GET /api/alerts/{id}/details
+     * Uses JOIN FETCH to avoid N+1 query problem
+     */
+    @GetMapping("/{id}/details")
+    public ResponseEntity<AlertDetailsDTO> getAlertDetailsWithSales(@PathVariable Long id) {
+        AlertDetailsDTO alertDetails = alertService.getAlertDetailsWithSales(id);
+        return ResponseEntity.ok(alertDetails);
     }
     
     /**
