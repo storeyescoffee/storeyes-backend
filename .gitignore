@@ -34,3 +34,6 @@ build/
 
 ### documentation ###
 docs/
+
+# dev env
+**/application-dev.yaml

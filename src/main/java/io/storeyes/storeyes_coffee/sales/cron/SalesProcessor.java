@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -79,13 +80,36 @@ public class SalesProcessor {
                     .hour(rs.getInt("hour"))
                     .saleTime(saleTime)
                     .coffeeName(rs.getString("coffee_name"))
-                    .quantity(rs.getBigDecimal("quantity"))
-                    .price(rs.getBigDecimal("price"))
-                    .totalPrice(rs.getBigDecimal("total_price"))
+                    .quantity(getBigDecimalSafely(rs, "quantity"))
+                    .price(getBigDecimalSafely(rs, "price"))
+                    .totalPrice(getBigDecimalSafely(rs, "total_price"))
                     .category(rs.getString("category"))
                     .createdAt(rs.getObject("created_at", LocalDateTime.class))
                     .coffeeShopName(rs.getString("coffee_shop_name"))
                     .build();
+        }
+        
+        /**
+         * Safely get BigDecimal from ResultSet, handling NaN values
+         * Returns null if the value is NaN or null
+         */
+        private BigDecimal getBigDecimalSafely(ResultSet rs, String columnName) throws SQLException {
+            try {
+                BigDecimal value = rs.getBigDecimal(columnName);
+                // Check if value is null or NaN
+                if (value == null) {
+                    return null;
+                }
+                // Check for NaN by comparing with Double.NaN
+                double doubleValue = value.doubleValue();
+                if (Double.isNaN(doubleValue) || Double.isInfinite(doubleValue)) {
+                    return null;
+                }
+                return value;
+            } catch (Exception e) {
+                // If conversion fails (e.g., NaN), return null
+                return null;
+            }
         }
     }
 
@@ -144,12 +168,31 @@ public class SalesProcessor {
             
             // Create Sales entities for these sales
             for (CoffeeSalesHourlyDTO csh : salesBeforeAlert) {
+                
+                
+                // Calculate totalPrice - default to 0 if null or invalid
+                Double totalPrice = 0.0;
+                if (csh.getTotalPrice() != null) {
+                    Double value = csh.getTotalPrice().doubleValue();
+                    // Check for NaN or Infinite and set to 0 if invalid
+                    if (!Double.isNaN(value) && !Double.isInfinite(value)) {
+                        totalPrice = value;
+                    }
+                } else {
+                    // Calculate totalPrice from quantity * price if totalPrice is null
+                    Double calculatedTotal = csh.getQuantity().doubleValue() * csh.getPrice().doubleValue();
+                    // Use calculated value if valid, otherwise keep default 0.0
+                    if (calculatedTotal != null && !Double.isNaN(calculatedTotal) && !Double.isInfinite(calculatedTotal)) {
+                        totalPrice = calculatedTotal;
+                    }
+                }
+                
                 Sales sales = Sales.builder()
                     .alert(alert)
                     .productName(csh.getCoffeeName())
-                    .quantity(csh.getQuantity() != null ? csh.getQuantity().doubleValue() : null)
-                    .price(csh.getPrice() != null ? csh.getPrice().doubleValue() : null)
-                    .totalPrice(csh.getTotalPrice() != null ? csh.getTotalPrice().doubleValue() : null)
+                    .quantity(csh.getQuantity().doubleValue())
+                    .price(csh.getPrice().doubleValue())
+                    .totalPrice(totalPrice)
                     .soldAt(csh.getSoldAt())
                     .category(csh.getCategory())
                     .build();
