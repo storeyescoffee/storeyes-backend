@@ -183,6 +183,18 @@ public class WeekCalculationUtils {
     }
 
     /**
+     * Get the number of weeks that overlap with a month.
+     * Used to prorate monthly fixed charges when returning week-period statistics.
+     *
+     * @param monthKey Format: "YYYY-MM"
+     * @return Number of weeks (typically 4 or 5)
+     */
+    public static int getWeeksCountInMonth(String monthKey) {
+        List<WeekInfo> weeks = getWeeksForMonth(monthKey);
+        return Math.max(weeks.size(), 1);
+    }
+
+    /**
      * Distribute monthly salary across weeks that belong to the month
      * All weeks are treated as full weeks (7 days each), so salary is distributed equally
      * 

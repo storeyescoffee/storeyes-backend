@@ -29,6 +29,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StatisticsService {
 
+    /**
+     * Fixed charge with the amount to use for the current period.
+     * For week period, monthly charges are prorated (amount / weeksInMonth); weekly charges are full amount.
+     */
+    private static record FixedChargeWithAmount(FixedCharge charge, BigDecimal effectiveAmount) {}
+
     private final FactKpiDailyRepository factKpiDailyRepository;
     private final DateDimensionRepository dateDimensionRepository;
     private final FixedChargeRepository fixedChargeRepository;
@@ -153,23 +159,22 @@ public class StatisticsService {
         // Fetch revenue
         BigDecimal revenue = getRevenueForPeriod(storeId, startDate, endDate);
         
-        // Fetch fixed charges
-        List<FixedCharge> fixedCharges = getFixedChargesList(storeId, period, month, week);
-        BigDecimal totalFixedCharges = fixedCharges.stream()
-                .map(FixedCharge::getAmount)
+        // Fetch fixed charges with effective amounts (prorated for week period)
+        String dateParam = period.equalsIgnoreCase("week") ? week : month;
+        List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(storeId, period, dateParam, week);
+        BigDecimal totalFixedCharges = fixedWithAmounts.stream()
+                .map(FixedChargeWithAmount::effectiveAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        // Fetch variable charges
+
         List<VariableCharge> variableCharges = variableChargeRepository.findByStoreIdAndDateRange(storeId, startDate, endDate);
         BigDecimal totalVariableCharges = variableCharges.stream()
                 .map(VariableCharge::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
+
         BigDecimal totalCharges = totalFixedCharges.add(totalVariableCharges);
-        
-        // Build fixed charges DTOs
-        List<ChargeItemDTO> fixedChargesDTO = fixedCharges.stream()
-                .map(charge -> toChargeItemDTO(charge, totalCharges, revenue))
+
+        List<ChargeItemDTO> fixedChargesDTO = fixedWithAmounts.stream()
+                .map(w -> toChargeItemDTO(w.charge(), w.effectiveAmount(), totalCharges, revenue))
                 .collect(Collectors.toList());
         
         // Build variable charges DTOs
@@ -182,7 +187,7 @@ public class StatisticsService {
                 .totalCharges(totalCharges)
                 .totalFixedCharges(totalFixedCharges)
                 .totalVariableCharges(totalVariableCharges)
-                .itemCount(fixedCharges.size() + variableCharges.size())
+                .itemCount(fixedWithAmounts.size() + variableCharges.size())
                 .percentageOfAllCharges(calculatePercentage(totalVariableCharges, totalCharges))
                 .caPercentage(calculatePercentage(totalCharges, revenue))
                 .revenue(revenue)
@@ -219,41 +224,76 @@ public class StatisticsService {
     }
 
     /**
-     * Get fixed charges total for a period
+     * Get fixed charges total for a period (uses effective amounts: prorated for week/day).
      */
     private BigDecimal getFixedChargesForPeriod(Long storeId, String period, String date) {
-        List<FixedCharge> charges = getFixedChargesList(storeId, period, date, null);
-        return charges.stream()
-                .map(FixedCharge::getAmount)
+        List<FixedChargeWithAmount> withAmounts = getFixedChargesWithEffectiveAmounts(storeId, period, date, null);
+        return withAmounts.stream()
+                .map(FixedChargeWithAmount::effectiveAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(SCALE, RoundingMode.HALF_UP);
     }
 
     /**
-     * Get fixed charges list for a period
+     * Get fixed charges with effective amounts for the period.
+     * For week: monthly charges prorated by weeks in month; weekly charges for that week at full amount.
+     * For month: all fixed for month at full amount.
+     * For day: monthly prorated by days in month; weekly for that week prorated by 7.
      */
-    private List<FixedCharge> getFixedChargesList(Long storeId, String period, String date, String week) {
+    private List<FixedChargeWithAmount> getFixedChargesWithEffectiveAmounts(Long storeId, String period, String date, String week) {
         if (period.equalsIgnoreCase("day")) {
-            // For day period, get all fixed charges for the month
             LocalDate dayDate = LocalDate.parse(date, DATE_FORMATTER);
             String monthKey = dayDate.format(MONTH_FORMATTER);
-            return fixedChargeRepository.findByStoreIdAndMonthKey(storeId, monthKey);
-        } else if (period.equalsIgnoreCase("week")) {
-            // For week period, get charges for the week
-            String weekKey;
-            if (week == null) {
-                weekKey = date; // date should be the week key (Monday date)
-            } else {
-                weekKey = week;
+            YearMonth yearMonth = YearMonth.parse(monthKey, MONTH_FORMATTER);
+            int daysInMonth = yearMonth.lengthOfMonth();
+            LocalDate monday = WeekCalculationUtils.getMondayOfWeek(dayDate);
+            String weekKey = WeekCalculationUtils.generateWeekKey(monday);
+
+            List<FixedChargeWithAmount> result = new ArrayList<>();
+            List<FixedCharge> monthCharges = fixedChargeRepository.findByStoreIdAndMonthKey(storeId, monthKey);
+            for (FixedCharge c : monthCharges) {
+                if (c.getPeriod() == ChargePeriod.MONTH) {
+                    BigDecimal effective = daysInMonth > 0
+                            ? c.getAmount().divide(BigDecimal.valueOf(daysInMonth), SCALE, RoundingMode.HALF_UP)
+                            : BigDecimal.ZERO;
+                    result.add(new FixedChargeWithAmount(c, effective));
+                }
             }
+            List<FixedCharge> weekCharges = fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(storeId, monthKey, weekKey);
+            for (FixedCharge c : weekCharges) {
+                if (c.getPeriod() == ChargePeriod.WEEK) {
+                    BigDecimal effective = c.getAmount().divide(BigDecimal.valueOf(7), SCALE, RoundingMode.HALF_UP);
+                    result.add(new FixedChargeWithAmount(c, effective));
+                }
+            }
+            return result;
+        } else if (period.equalsIgnoreCase("week")) {
+            String weekKey = (week != null && !week.isEmpty()) ? week : date;
             LocalDate weekDate = LocalDate.parse(weekKey, DATE_FORMATTER);
             LocalDate monday = WeekCalculationUtils.getMondayOfWeek(weekDate);
             String monthKey = monday.format(MONTH_FORMATTER);
             String mondayWeekKey = WeekCalculationUtils.generateWeekKey(monday);
-            return fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(storeId, monthKey, mondayWeekKey);
+            int weeksCount = WeekCalculationUtils.getWeeksCountInMonth(monthKey);
+
+            List<FixedChargeWithAmount> result = new ArrayList<>();
+            List<FixedCharge> monthCharges = fixedChargeRepository.findByStoreIdAndMonthKey(storeId, monthKey);
+            for (FixedCharge c : monthCharges) {
+                if (c.getPeriod() == ChargePeriod.MONTH) {
+                    BigDecimal effective = c.getAmount().divide(BigDecimal.valueOf(weeksCount), SCALE, RoundingMode.HALF_UP);
+                    result.add(new FixedChargeWithAmount(c, effective));
+                }
+            }
+            List<FixedCharge> weekCharges = fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(storeId, monthKey, mondayWeekKey);
+            for (FixedCharge c : weekCharges) {
+                result.add(new FixedChargeWithAmount(c, c.getAmount()));
+            }
+            return result;
         } else {
-            // For month period
-            return fixedChargeRepository.findByStoreIdAndMonthKey(storeId, date);
+            // month
+            List<FixedCharge> charges = fixedChargeRepository.findByStoreIdAndMonthKey(storeId, date);
+            return charges.stream()
+                    .map(c -> new FixedChargeWithAmount(c, c.getAmount()))
+                    .collect(Collectors.toList());
         }
     }
 
@@ -347,39 +387,43 @@ public class StatisticsService {
     }
 
     /**
-     * Generate chart data for week period (shows weeks in month: W1, W2, W3, W4)
+     * Generate chart data for week period (shows weeks in month: W1, W2, W3, W4).
+     * Fixed charges per week = prorated monthly + full weekly for that week.
      */
     private List<ChartDataDTO> generateWeekChartData(Long storeId, String weekKey) {
         LocalDate weekDate = LocalDate.parse(weekKey, DATE_FORMATTER);
         LocalDate monday = WeekCalculationUtils.getMondayOfWeek(weekDate);
         String monthKey = monday.format(MONTH_FORMATTER);
-        
-        // Get all weeks that belong to this month
+
         List<WeekCalculationUtils.WeekInfo> weeks = WeekCalculationUtils.getWeeksBelongingToMonth(monthKey);
-        
+
         List<ChartDataDTO> chartData = new ArrayList<>();
         int weekNumber = 1;
-        
+
         for (WeekCalculationUtils.WeekInfo week : weeks) {
             LocalDate weekMonday = week.getStartDate();
             LocalDate weekSunday = week.getEndDate();
-            
+
             BigDecimal revenue = getRevenueForPeriod(storeId, weekMonday, weekSunday);
-            BigDecimal fixedCharges = getFixedChargesForPeriod(storeId, "week", week.getWeekKey());
+            List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(storeId, "week", null, week.getWeekKey());
+            BigDecimal fixedCharges = fixedWithAmounts.stream()
+                    .map(FixedChargeWithAmount::effectiveAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .setScale(SCALE, RoundingMode.HALF_UP);
             BigDecimal variableCharges = getVariableChargesForPeriod(storeId, weekMonday, weekSunday);
             BigDecimal charges = fixedCharges.add(variableCharges);
             BigDecimal profit = revenue.subtract(charges);
-            
+
             chartData.add(ChartDataDTO.builder()
                     .period("W" + weekNumber)
                     .revenue(revenue)
                     .charges(charges)
                     .profit(profit)
                     .build());
-            
+
             weekNumber++;
         }
-        
+
         return chartData;
     }
 
@@ -417,23 +461,21 @@ public class StatisticsService {
     }
 
     /**
-     * Get charges breakdown
+     * Get charges breakdown (uses effective amounts for fixed charges in week/day).
      */
-    private ChargesDTO getChargesBreakdown(Long storeId, String period, String date, 
+    private ChargesDTO getChargesBreakdown(Long storeId, String period, String date,
                                           LocalDate startDate, LocalDate endDate,
                                           BigDecimal totalCharges, BigDecimal revenue) {
-        // Get fixed charges
-        List<FixedCharge> fixedCharges = getFixedChargesList(storeId, period, date, null);
-        List<ChargeItemDTO> fixedDTOs = fixedCharges.stream()
-                .map(charge -> toChargeItemDTO(charge, totalCharges, revenue))
+        List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(storeId, period, date, null);
+        List<ChargeItemDTO> fixedDTOs = fixedWithAmounts.stream()
+                .map(w -> toChargeItemDTO(w.charge(), w.effectiveAmount(), totalCharges, revenue))
                 .collect(Collectors.toList());
-        
-        // Get variable charges
+
         List<VariableCharge> variableCharges = variableChargeRepository.findByStoreIdAndDateRange(storeId, startDate, endDate);
         List<ChargeItemDTO> variableDTOs = variableCharges.stream()
                 .map(charge -> toChargeItemDTO(charge, totalCharges, revenue))
                 .collect(Collectors.toList());
-        
+
         return ChargesDTO.builder()
                 .fixed(fixedDTOs)
                 .variable(variableDTOs)
@@ -441,19 +483,18 @@ public class StatisticsService {
     }
 
     /**
-     * Convert FixedCharge to ChargeItemDTO
+     * Convert FixedCharge to ChargeItemDTO using effective amount (for prorated week/day).
      */
-    private ChargeItemDTO toChargeItemDTO(FixedCharge charge, BigDecimal totalCharges, BigDecimal revenue) {
+    private ChargeItemDTO toChargeItemDTO(FixedCharge charge, BigDecimal effectiveAmount, BigDecimal totalCharges, BigDecimal revenue) {
         String name = getChargeName(charge);
-        BigDecimal amount = charge.getAmount();
-        BigDecimal percentageOfCharges = calculatePercentage(amount, totalCharges);
-        BigDecimal percentageOfRevenue = calculatePercentage(amount, revenue);
+        BigDecimal percentageOfCharges = calculatePercentage(effectiveAmount, totalCharges);
+        BigDecimal percentageOfRevenue = calculatePercentage(effectiveAmount, revenue);
         String status = calculateChargeStatus(percentageOfRevenue);
-        
+
         return ChargeItemDTO.builder()
                 .id(charge.getId())
                 .name(name)
-                .amount(amount)
+                .amount(effectiveAmount)
                 .percentageOfCharges(percentageOfCharges)
                 .percentageOfRevenue(percentageOfRevenue)
                 .category("fixed")
