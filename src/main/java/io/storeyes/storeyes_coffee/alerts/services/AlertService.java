@@ -77,38 +77,46 @@ public class AlertService {
             date = LocalDate.now().atStartOfDay();
         }
         
+        List<Alert> alerts;
         // Date filter is provided (or defaulted to today)
         if (endDate != null) {
             // Date range provided
             if (storeId != null) {
                 if (filterUnprocessed) {
-                    return alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
+                    alerts = alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
                 } else {
-                    return alertRepository.findProcessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
+                    alerts = alertRepository.findProcessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
                 }
             } else {
                 if (filterUnprocessed) {
-                    return alertRepository.findUnprocessedByAlertDateBetween(date, endDate);
+                    alerts = alertRepository.findUnprocessedByAlertDateBetween(date, endDate);
                 } else {
-                    return alertRepository.findProcessedByAlertDateBetween(date, endDate);
+                    alerts = alertRepository.findProcessedByAlertDateBetween(date, endDate);
                 }
             }
         } else {
             // Exact date provided (or defaulted to today)
             if (storeId != null) {
                 if (filterUnprocessed) {
-                    return alertRepository.findUnprocessedByAlertDateAndStoreId(date, storeId);
+                    alerts = alertRepository.findUnprocessedByAlertDateAndStoreId(date, storeId);
                 } else {
-                    return alertRepository.findProcessedByAlertDateAndStoreId(date, storeId);
+                    alerts = alertRepository.findProcessedByAlertDateAndStoreId(date, storeId);
                 }
             } else {
                 if (filterUnprocessed) {
-                    return alertRepository.findUnprocessedByAlertDate(date);
+                    alerts = alertRepository.findUnprocessedByAlertDate(date);
                 } else {
-                    return alertRepository.findProcessedByAlertDate(date);
+                    alerts = alertRepository.findProcessedByAlertDate(date);
                 }
             }
         }
+        // Only return alerts with humanJudgement NEW or TRUE_POSITIVE (show in list for user to verify)
+        return alerts.stream()
+                .filter(a -> {
+                    HumanJudgement h = a.getHumanJudgement();
+                    return h == null || h == HumanJudgement.NEW || h == HumanJudgement.TRUE_POSITIVE;
+                })
+                .collect(Collectors.toList());
     }
     
     /**
