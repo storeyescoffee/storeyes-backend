@@ -15,5 +15,9 @@ public class RevenueDTO {
     private Integer transactions;
     private Double avgTransactionValue;
     private Double revenuePerTransaction;
+    /** TPE (card payment) - owner-entered. Espèce = totalTTC - tpe (computed). */
+    private Double tpe;
+    /** Espèce (cash) = totalTTC - tpe. Computed from backend. */
+    private Double espece;
 }
 

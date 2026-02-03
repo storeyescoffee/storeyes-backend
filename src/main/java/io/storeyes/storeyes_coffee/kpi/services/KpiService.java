@@ -1,6 +1,7 @@
 package io.storeyes.storeyes_coffee.kpi.services;
 
 import io.storeyes.storeyes_coffee.kpi.dto.*;
+import io.storeyes.storeyes_coffee.kpi.entities.DailyRevenuePaymentBreakdown;
 import io.storeyes.storeyes_coffee.kpi.entities.DateDimension;
 import io.storeyes.storeyes_coffee.kpi.entities.FactKpiCategoryDaily;
 import io.storeyes.storeyes_coffee.kpi.entities.FactKpiDaily;
@@ -28,6 +29,7 @@ public class KpiService {
     private final FactKpiCategoryDailyRepository factKpiCategoryDailyRepository;
     private final FactKpiServerDailyRepository factKpiServerDailyRepository;
     private final DateDimensionRepository dateDimensionRepository;
+    private final DailyRevenuePaymentBreakdownRepository dailyRevenuePaymentBreakdownRepository;
     private final StoreRepository storeRepository;
     
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -60,13 +62,23 @@ public class KpiService {
         // Get server data
         List<FactKpiServerDaily> serverKpis = factKpiServerDailyRepository.findByStoreIdAndDateOrderByRevenueDesc(storeId, dateDimension);
         
-        // Build revenue DTO
+        // Build revenue DTO (include TPE and Espèce from breakdown if present)
+        Double totalTTC = dailyKpi.getTotalRevenueTtc();
+        Double tpe = null;
+        Double espece = null;
+        var breakdownOpt = dailyRevenuePaymentBreakdownRepository.findByStoreIdAndDate(storeId, dateDimension);
+        if (breakdownOpt.isPresent()) {
+            tpe = breakdownOpt.get().getTpe();
+            espece = Math.max(0, totalTTC - (tpe != null ? tpe : 0));
+        }
         RevenueDTO revenue = RevenueDTO.builder()
-                .totalTTC(dailyKpi.getTotalRevenueTtc())
+                .totalTTC(totalTTC)
                 .totalHT(dailyKpi.getTotalRevenueHt())
                 .transactions(dailyKpi.getTransactions())
                 .avgTransactionValue(dailyKpi.getAverageTransactionValue())
                 .revenuePerTransaction(dailyKpi.getAverageTransactionValue())
+                .tpe(tpe)
+                .espece(espece)
                 .build();
         
         // Build hourly data DTOs
@@ -152,6 +164,37 @@ public class KpiService {
                 .build();
     }
     
+    /**
+     * Update TPE (card payment) for a daily report. Espèce = TTC - TPE (computed).
+     * @param storeId store ID
+     * @param date date for the report
+     * @param tpe TPE value (card payment). Must be >= 0 and <= total TTC.
+     */
+    public void updateRevenueBreakdown(Long storeId, LocalDate date, Double tpe) {
+        if (tpe == null || tpe < 0) {
+            throw new RuntimeException("TPE must be >= 0");
+        }
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new RuntimeException("Store not found with id: " + storeId));
+        DateDimension dateDimension = dateDimensionRepository.findByDate(date)
+                .orElseThrow(() -> new RuntimeException("Date dimension not found for date: " + date));
+        FactKpiDaily dailyKpi = factKpiDailyRepository.findByStoreIdAndDate(storeId, dateDimension)
+                .orElseThrow(() -> new RuntimeException("Daily KPI not found for store: " + storeId + " and date: " + date));
+        Double totalTTC = dailyKpi.getTotalRevenueTtc();
+        if (tpe > totalTTC) {
+            throw new RuntimeException("TPE cannot exceed total revenue (TTC): " + totalTTC);
+        }
+        DailyRevenuePaymentBreakdown breakdown = dailyRevenuePaymentBreakdownRepository
+                .findByStoreIdAndDate(storeId, dateDimension)
+                .orElse(DailyRevenuePaymentBreakdown.builder()
+                        .store(store)
+                        .date(dateDimension)
+                        .tpe(0.0)
+                        .build());
+        breakdown.setTpe(tpe);
+        dailyRevenuePaymentBreakdownRepository.save(breakdown);
+    }
+
     /**
      * Format hour integer to "HH:mm" string
      */

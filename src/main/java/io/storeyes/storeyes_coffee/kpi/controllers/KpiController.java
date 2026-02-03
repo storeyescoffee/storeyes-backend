@@ -1,6 +1,7 @@
 package io.storeyes.storeyes_coffee.kpi.controllers;
 
 import io.storeyes.storeyes_coffee.kpi.dto.DailyReportDTO;
+import io.storeyes.storeyes_coffee.kpi.dto.UpdateRevenueBreakdownRequest;
 import io.storeyes.storeyes_coffee.kpi.repositories.DateDimensionRepository;
 import io.storeyes.storeyes_coffee.kpi.services.KpiService;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
@@ -10,6 +11,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.Collections;
 
@@ -55,6 +57,32 @@ public class KpiController {
             return ResponseEntity.ok(Collections.emptyMap());
         }
         
+        DailyReportDTO report = kpiService.getDailyReport(storeId, date);
+        return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Update TPE (card payment) for a daily report. Espèce = TTC - TPE (computed automatically).
+     * PATCH /api/kpi/daily-report/revenue-breakdown?date={date}
+     *
+     * Request body: { "tpe": 1234.56 }
+     * TPE must be >= 0 and <= total revenue (TTC).
+     */
+    @PatchMapping("/daily-report/revenue-breakdown")
+    public ResponseEntity<?> updateRevenueBreakdown(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Valid @RequestBody UpdateRevenueBreakdownRequest request) {
+
+        String userId = KeycloakTokenUtils.getUserId();
+        if (userId == null) {
+            throw new RuntimeException("User is not authenticated");
+        }
+
+        Long storeId = storeService.getStoreByOwnerId(userId).getId();
+
+        kpiService.updateRevenueBreakdown(storeId, date, request.getTpe());
+
+        // Return updated daily report
         DailyReportDTO report = kpiService.getDailyReport(storeId, date);
         return ResponseEntity.ok(report);
     }
