@@ -44,6 +44,13 @@ public class FixedCharge {
     @Enumerated(EnumType.STRING)
     private ChargeCategory category;
 
+    /**
+     * Custom name for fixed charges when category is OTHER (e.g. "Rent", "Insurance").
+     * Null for predefined categories (PERSONNEL, WATER, ELECTRICITY, WIFI).
+     */
+    @Column(name = "name", length = 255)
+    private String name;
+
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 

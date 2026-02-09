@@ -76,4 +76,33 @@ public interface FixedChargeRepository extends JpaRepository<FixedCharge, Long> 
             @Param("period") ChargePeriod period,
             @Param("monthKey") String monthKey
     );
+
+    /**
+     * Find previous fixed charge for trend (OTHER category: same custom name)
+     */
+    @Query("SELECT fc FROM FixedCharge fc WHERE fc.store.id = :storeId AND fc.category = :category AND fc.period = :period " +
+           "AND fc.name = :name AND ((:period = io.storeyes.storeyes_coffee.charges.entities.ChargePeriod.MONTH AND fc.monthKey < :monthKey) " +
+           "OR (:period = io.storeyes.storeyes_coffee.charges.entities.ChargePeriod.WEEK AND fc.weekKey < :weekKey)) " +
+           "ORDER BY fc.monthKey DESC, fc.weekKey DESC")
+    List<FixedCharge> findPreviousChargesWithName(
+            @Param("storeId") Long storeId,
+            @Param("category") ChargeCategory category,
+            @Param("period") ChargePeriod period,
+            @Param("name") String name,
+            @Param("monthKey") String monthKey,
+            @Param("weekKey") String weekKey
+    );
+
+    /**
+     * Find historical charges for chart (OTHER category: same custom name)
+     */
+    @Query("SELECT fc FROM FixedCharge fc WHERE fc.store.id = :storeId AND fc.category = :category AND fc.period = :period " +
+           "AND fc.name = :name AND fc.monthKey <= :monthKey ORDER BY fc.monthKey DESC")
+    List<FixedCharge> findHistoricalChargesWithName(
+            @Param("storeId") Long storeId,
+            @Param("category") ChargeCategory category,
+            @Param("period") ChargePeriod period,
+            @Param("name") String name,
+            @Param("monthKey") String monthKey
+    );
 }

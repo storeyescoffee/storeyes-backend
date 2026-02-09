@@ -18,6 +18,8 @@ import java.time.LocalDateTime;
 public class FixedChargeResponse {
     private Long id;
     private ChargeCategory category;
+    /** Custom name when category is OTHER; null otherwise */
+    private String name;
     private BigDecimal amount;
     private ChargePeriod period;
     private String monthKey;

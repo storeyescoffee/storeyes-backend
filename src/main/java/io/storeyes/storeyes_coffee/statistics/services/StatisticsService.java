@@ -538,6 +538,9 @@ public class StatisticsService {
                 return "Electricity";
             case WIFI:
                 return "WiFi";
+            case OTHER:
+                return (charge.getName() != null && !charge.getName().trim().isEmpty())
+                        ? charge.getName().trim() : "Other";
             default:
                 return category.name();
         }

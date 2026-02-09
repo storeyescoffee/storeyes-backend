@@ -133,6 +133,11 @@ public class ChargeService {
                 .abnormalIncrease(false)
                 .build();
 
+        // Set custom name when category is OTHER
+        if (request.getCategory() == ChargeCategory.OTHER && request.getName() != null) {
+            charge.setName(request.getName().trim());
+        }
+
         // Handle personnel charges with employees
         if (request.getCategory() == ChargeCategory.PERSONNEL) {
             if (request.getEmployees() == null || request.getEmployees().isEmpty()) {
@@ -151,14 +156,14 @@ public class ChargeService {
                 charge.setAmount(request.getAmount());
             }
         } else {
-            // For non-personnel charges, amount is required
+            // For non-personnel (utilities + OTHER), amount is required
             if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new RuntimeException("Amount is required for non-personnel charges");
             }
             charge.setAmount(request.getAmount());
         }
 
-        // Calculate trend
+        // Calculate trend (for OTHER, trend is by same name)
         calculateAndSetTrend(charge, storeId);
 
         // Save charge (cascade will save employees)
@@ -198,6 +203,9 @@ public class ChargeService {
         }
         if (request.getNotes() != null) {
             charge.setNotes(request.getNotes());
+        }
+        if (request.getName() != null && charge.getCategory() == ChargeCategory.OTHER) {
+            charge.setName(request.getName().trim());
         }
 
         // Handle employee updates for personnel charges
@@ -1198,15 +1206,28 @@ public class ChargeService {
 
     /**
      * Calculate and set trend for a fixed charge
+     * For OTHER category, compares to previous charges with the same custom name
      */
     private void calculateAndSetTrend(FixedCharge charge, Long storeId) {
-        List<FixedCharge> previousCharges = fixedChargeRepository.findPreviousCharges(
-                storeId,
-                charge.getCategory(),
-                charge.getPeriod(),
-                charge.getMonthKey(),
-                charge.getWeekKey() != null ? charge.getWeekKey() : ""
-        );
+        List<FixedCharge> previousCharges;
+        if (charge.getCategory() == ChargeCategory.OTHER && charge.getName() != null && !charge.getName().trim().isEmpty()) {
+            previousCharges = fixedChargeRepository.findPreviousChargesWithName(
+                    storeId,
+                    charge.getCategory(),
+                    charge.getPeriod(),
+                    charge.getName().trim(),
+                    charge.getMonthKey(),
+                    charge.getWeekKey() != null ? charge.getWeekKey() : ""
+            );
+        } else {
+            previousCharges = fixedChargeRepository.findPreviousCharges(
+                    storeId,
+                    charge.getCategory(),
+                    charge.getPeriod(),
+                    charge.getMonthKey(),
+                    charge.getWeekKey() != null ? charge.getWeekKey() : ""
+            );
+        }
 
         if (!previousCharges.isEmpty()) {
             FixedCharge previousCharge = previousCharges.get(0);
@@ -1263,6 +1284,7 @@ public class ChargeService {
         return FixedChargeResponse.builder()
                 .id(charge.getId())
                 .category(charge.getCategory())
+                .name(charge.getName())
                 .amount(amount)
                 .period(charge.getPeriod())
                 .monthKey(charge.getMonthKey())
@@ -1310,6 +1332,7 @@ public class ChargeService {
         FixedChargeDetailResponse response = FixedChargeDetailResponse.builder()
                 .id(charge.getId())
                 .category(charge.getCategory())
+                .name(charge.getName())
                 .amount(amount)
                 .period(charge.getPeriod())
                 .monthKey(charge.getMonthKey())
@@ -1363,13 +1386,25 @@ public class ChargeService {
             response.setPersonnelData(personnelData);
         }
 
-        // Build chart data (historical charges)
-        List<FixedCharge> historicalCharges = fixedChargeRepository.findHistoricalCharges(
-                storeId,
-                charge.getCategory(),
-                charge.getPeriod(),
-                month != null ? month : charge.getMonthKey()
-        );
+        // Build chart data (historical charges; for OTHER, filter by same name)
+        String monthKeyForChart = month != null ? month : charge.getMonthKey();
+        List<FixedCharge> historicalCharges;
+        if (charge.getCategory() == ChargeCategory.OTHER && charge.getName() != null && !charge.getName().trim().isEmpty()) {
+            historicalCharges = fixedChargeRepository.findHistoricalChargesWithName(
+                    storeId,
+                    charge.getCategory(),
+                    charge.getPeriod(),
+                    charge.getName().trim(),
+                    monthKeyForChart
+            );
+        } else {
+            historicalCharges = fixedChargeRepository.findHistoricalCharges(
+                    storeId,
+                    charge.getCategory(),
+                    charge.getPeriod(),
+                    monthKeyForChart
+            );
+        }
         List<ChartDataDTO> chartData = historicalCharges.stream()
                 .map(hc -> ChartDataDTO.builder()
                         .period(formatMonthKey(hc.getMonthKey()))
@@ -1481,14 +1516,20 @@ public class ChargeService {
             }
         }
 
+        if (request.getCategory() == ChargeCategory.OTHER) {
+            if (request.getName() == null || request.getName().trim().isEmpty()) {
+                throw new RuntimeException("Name is required for custom (Other) fixed charges");
+            }
+        }
+
         if (request.getCategory() != ChargeCategory.PERSONNEL && 
             (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0)) {
             throw new RuntimeException("Amount is required for non-personnel charges");
         }
 
-        // Validate utilities must be MONTH period
+        // Validate utilities and OTHER must be MONTH period
         if (request.getCategory() != ChargeCategory.PERSONNEL && request.getPeriod() != ChargePeriod.MONTH) {
-            throw new RuntimeException("Utilities (water, electricity, wifi) must use MONTH period");
+            throw new RuntimeException("Non-personnel fixed charges (water, electricity, wifi, other) must use MONTH period");
         }
     }
 

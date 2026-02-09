@@ -4,5 +4,6 @@ public enum ChargeCategory {
     PERSONNEL,
     WATER,
     ELECTRICITY,
-    WIFI
+    WIFI,
+    OTHER
 }
