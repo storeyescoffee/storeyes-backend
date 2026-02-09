@@ -34,12 +34,6 @@ public class FixedChargeUpdateRequest {
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
     
-    /**
-     * Custom name for fixed charge when category is OTHER.
-     */
-    @Size(max = 255, message = "Name must not exceed 255 characters")
-    private String name;
-    
     @Valid
     private List<PersonnelEmployeeRequest> employees;
 }

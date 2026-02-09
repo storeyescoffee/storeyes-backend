@@ -43,13 +43,6 @@ public class FixedChargeCreateRequest {
     
     private String weekKey; // Required if period is WEEK
     
-    /**
-     * Custom name for fixed charge when category is OTHER (e.g. "Rent", "Insurance").
-     * Required when category is OTHER.
-     */
-    @Size(max = 255, message = "Name must not exceed 255 characters")
-    private String name;
-    
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
     
