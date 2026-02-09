@@ -40,6 +40,9 @@ public class Alert {
     @JsonIgnoreProperties({"alerts", "devices"})
     private Store store;
 
+    @Column(name = "alert_type", columnDefinition = "int default 0")
+    private AlertType alertType;
+
 
     @Column(name = "video_url", nullable = false, length = 1024)
     private String mainVideoUrl;

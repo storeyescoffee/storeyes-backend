@@ -1,5 +1,6 @@
 package io.storeyes.storeyes_coffee.alerts.dto;
 
+import io.storeyes.storeyes_coffee.alerts.entities.AlertType;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -20,5 +21,7 @@ public class CreateAlertRequest {
 
     @NotNull(message = "Store code is required")
     private String storeCode;
+    
+    private AlertType alertType;
 }
 
