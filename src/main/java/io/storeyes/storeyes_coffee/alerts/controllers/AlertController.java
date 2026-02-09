@@ -42,8 +42,9 @@ public class AlertController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(required = false) Boolean unprocessed,
-            @RequestParam(required = false) Long store_id) {
-        List<Alert> alerts = alertService.getAlertsByDate(date, endDate, unprocessed, store_id);
+            @RequestParam(required = false) Long store_id,
+            @RequestParam(required = false) Boolean returnType) {
+        List<Alert> alerts = alertService.getAlertsByDate(date, endDate, unprocessed, store_id, returnType);
         List<AlertDTO> alertDTOs = alertMapper.toDTOList(alerts);
         return ResponseEntity.ok(alertDTOs);
     }

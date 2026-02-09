@@ -32,6 +32,7 @@ public class AlertService {
     /**
      * Create a new alert
      * If an alert with the same alertDate already exists, ignores it without creating a duplicate
+     * If alertType is null, defaults to NOT_TAPPED
      */
     public void createAlert(CreateAlertRequest request) {
         // Get store by code
@@ -47,6 +48,7 @@ public class AlertService {
                     .mainVideoUrl(request.getMainVideoUrl())
                     .productName(request.getProductName())
                     .imageUrl(request.getImageUrl())
+                    .alertType(request.getAlertType() != null ? request.getAlertType() : io.storeyes.storeyes_coffee.alerts.entities.AlertType.NOT_TAPPED)
                     .isProcessed(false)
                     .build();
             
@@ -59,9 +61,11 @@ public class AlertService {
      * By default returns processed alerts, unless unprocessed=true
      * If date is not provided, defaults to today's date
      * Optionally filters by store_id if provided, otherwise uses authenticated user's store
+     * If returnTypeFlag=true, returns only alerts with alertType=RETURN (ignores unprocessed filter)
      */
-    public List<Alert> getAlertsByDate(LocalDateTime date, LocalDateTime endDate, Boolean unprocessed, Long storeId) {
+    public List<Alert> getAlertsByDate(LocalDateTime date, LocalDateTime endDate, Boolean unprocessed, Long storeId, Boolean returnType) {
         boolean filterUnprocessed = Boolean.TRUE.equals(unprocessed);
+        boolean filterReturnType = Boolean.TRUE.equals(returnType);
         
         // If storeId is not provided, get it from the authenticated user's store
         if (storeId == null) {
@@ -110,9 +114,15 @@ public class AlertService {
                 }
             }
         }
-        // Only return alerts with humanJudgement NEW or TRUE_POSITIVE (show in list for user to verify)
+        
+        // Apply filters
         return alerts.stream()
                 .filter(a -> {
+                    // If returnFlag is true, only return alerts with alertType=RETURN
+                    if (filterReturnType) {
+                        return a.getAlertType() == io.storeyes.storeyes_coffee.alerts.entities.AlertType.RETURN;
+                    }
+                    // Otherwise, only return alerts with humanJudgement NEW or TRUE_POSITIVE
                     HumanJudgement h = a.getHumanJudgement();
                     return h == null || h == HumanJudgement.NEW || h == HumanJudgement.TRUE_POSITIVE;
                 })
