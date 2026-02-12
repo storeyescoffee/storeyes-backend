@@ -1,4 +1,9 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+      
   application:
     name: storeyes-coffee
 
@@ -40,3 +45,11 @@ server:
     key-password: ${SSL_KEYSTORE_PASSWORD:sahtout@2026}
   http:
     port: ${HTTP_PORT:8080}
+
+# AWS S3 Configuration
+aws:
+  s3:
+    bucket-name: ${AWS_S3_BUCKET_NAME:storeyes-documents}
+    region: ${AWS_S3_REGION:eu-south-2}
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
