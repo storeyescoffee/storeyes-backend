@@ -28,6 +28,7 @@ public class DocumentCategoryService {
     private final StoreRepository storeRepository;
     private final DocumentCategoryMapper categoryMapper;
 
+    @Transactional(readOnly = true)
     public List<DocumentCategoryDTO> getAllCategoriesByStore() {
         String userId = KeycloakTokenUtils.getUserId();
         if (userId == null) {
