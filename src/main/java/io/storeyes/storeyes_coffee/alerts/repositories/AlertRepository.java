@@ -23,6 +23,10 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     @Query("SELECT a FROM Alert a WHERE a.alertDate = :alertDate")
     Optional<Alert> findByExactAlertDate(LocalDateTime alertDate);
     
+    // Find alert by exact alertDate timestamp and alertType
+    @Query("SELECT a FROM Alert a WHERE a.alertDate = :alertDate AND a.alertType = :alertType")
+    Optional<Alert> findByExactAlertDateAndAlertType(LocalDateTime alertDate, io.storeyes.storeyes_coffee.alerts.entities.AlertType alertType);
+    
     // Find alerts within a date range
     @Query("SELECT a FROM Alert a WHERE a.alertDate >= :startDate AND a.alertDate <= :endDate ORDER BY a.alertDate DESC")
     List<Alert> findByAlertDateBetween(

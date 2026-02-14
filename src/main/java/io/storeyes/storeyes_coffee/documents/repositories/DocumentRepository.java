@@ -15,3 +15,4 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     List<Document> findByStore_Id(Long storeId);
 }
 
+

@@ -31,16 +31,22 @@ public class AlertService {
     
     /**
      * Create a new alert
-     * If an alert with the same alertDate already exists, ignores it without creating a duplicate
+     * If an alert with the same alertDate and alertType already exists, ignores it without creating a duplicate
      * If alertType is null, defaults to NOT_TAPPED
      */
     public void createAlert(CreateAlertRequest request) {
-        // Get store by code
-        var store = storeRepository.findByCode(request.getStoreCode())
-                .orElseThrow(() -> new RuntimeException("Store not found with code: " + request.getStoreCode()));
+        // Determine alertType first (default to NOT_TAPPED if null)
+        io.storeyes.storeyes_coffee.alerts.entities.AlertType alertType = request.getAlertType() != null 
+                ? request.getAlertType() 
+                : io.storeyes.storeyes_coffee.alerts.entities.AlertType.NOT_TAPPED;
         
-        // Check if an alert with the same alertDate already exists
-        if (alertRepository.findByExactAlertDate(request.getAlertDate()).isEmpty()) {
+        // Check if an alert with the same alertDate and alertType already exists
+        // Skip store lookup if duplicate exists
+        if (alertRepository.findByExactAlertDateAndAlertType(request.getAlertDate(), alertType).isEmpty()) {
+            // Get store by code
+            var store = storeRepository.findByCode(request.getStoreCode())
+                    .orElseThrow(() -> new RuntimeException("Store not found with code: " + request.getStoreCode()));
+            
             // No existing alert found, create a new one
             Alert alert = Alert.builder()
                     .alertDate(request.getAlertDate())
@@ -48,7 +54,7 @@ public class AlertService {
                     .mainVideoUrl(request.getMainVideoUrl())
                     .productName(request.getProductName())
                     .imageUrl(request.getImageUrl())
-                    .alertType(request.getAlertType() != null ? request.getAlertType() : io.storeyes.storeyes_coffee.alerts.entities.AlertType.NOT_TAPPED)
+                    .alertType(alertType)
                     .isProcessed(false)
                     .build();
             
