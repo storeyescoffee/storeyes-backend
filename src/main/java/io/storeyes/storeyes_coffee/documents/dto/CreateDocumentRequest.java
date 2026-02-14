@@ -13,6 +13,8 @@ public class CreateDocumentRequest {
     
     private String description;
     
+    private Long categoryId;
+    
     @NotNull(message = "File is required")
     private MultipartFile file;
 }

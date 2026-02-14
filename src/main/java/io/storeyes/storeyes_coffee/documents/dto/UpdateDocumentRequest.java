@@ -10,6 +10,11 @@ public class UpdateDocumentRequest {
     
     private String description;
     
+    private Long categoryId;
+    
+    /** When true, unlink document from any category. */
+    private Boolean unsetCategory;
+    
     private MultipartFile file;
 }
 

@@ -1,48 +1,41 @@
 package io.storeyes.storeyes_coffee.documents.entities;
 
+import io.storeyes.storeyes_coffee.store.entities.Store;
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-
-import io.storeyes.storeyes_coffee.store.entities.Store;
-import io.storeyes.storeyes_coffee.documents.entities.DocumentCategory;
-
-
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "documents")
-public class Document {
-    
+@Table(name = "document_categories")
+public class DocumentCategory {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "document_id_seq")
-    @SequenceGenerator(name = "document_id_seq", sequenceName = "document_id_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "document_category_id_seq")
+    @SequenceGenerator(name = "document_category_id_seq", sequenceName = "document_category_id_seq", allocationSize = 1)
     private Long id;
 
     @JoinColumn(name = "store_id", nullable = false)
     @ManyToOne
     private Store store;
 
-    @JoinColumn(name = "category_id")
-    @ManyToOne
-    private DocumentCategory category;
-
-    @Column(name = "name", nullable = false)
+    @Column(name = "name", nullable = false, length = 255)
     private String name;
 
     @Column(name = "description", columnDefinition = "text")
     private String description;
 
-    @Column(name = "url", nullable = false, length = 1024)
-    private String url;
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder = 0;
 
     @Column(name = "created_at", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
@@ -53,5 +46,4 @@ public class Document {
     @Temporal(TemporalType.TIMESTAMP)
     @UpdateTimestamp
     private LocalDateTime updatedAt;
-
 }

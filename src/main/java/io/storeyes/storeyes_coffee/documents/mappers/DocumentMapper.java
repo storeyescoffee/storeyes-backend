@@ -12,6 +12,8 @@ public interface DocumentMapper {
     
     @Mapping(target = "storeId", source = "store.id")
     @Mapping(target = "storeCode", source = "store.code")
+    @Mapping(target = "categoryId", source = "category.id")
+    @Mapping(target = "categoryName", source = "category.name")
     DocumentDTO toDTO(Document document);
     
     List<DocumentDTO> toDTOList(List<Document> documents);
