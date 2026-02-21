@@ -1,6 +1,7 @@
 package io.storeyes.storeyes_coffee.alerts.repositories;
 
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
+import io.storeyes.storeyes_coffee.alerts.entities.AlertType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -25,7 +26,11 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     
     // Find alert by exact alertDate timestamp and alertType
     @Query("SELECT a FROM Alert a WHERE a.alertDate = :alertDate AND a.alertType = :alertType")
-    Optional<Alert> findByExactAlertDateAndAlertType(LocalDateTime alertDate, io.storeyes.storeyes_coffee.alerts.entities.AlertType alertType);
+    Optional<Alert> findByExactAlertDateAndAlertType(LocalDateTime alertDate, AlertType alertType);
+    
+    // Find alert by exact alertDate timestamp, alertType, and storeId
+    @Query("SELECT a FROM Alert a WHERE a.alertDate = :alertDate AND a.alertType = :alertType AND a.store.id = :storeId")
+    Optional<Alert> findByExactAlertDateAndAlertTypeAndStoreId(LocalDateTime alertDate, AlertType alertType, Long storeId);
     
     // Find alerts within a date range
     @Query("SELECT a FROM Alert a WHERE a.alertDate >= :startDate AND a.alertDate <= :endDate ORDER BY a.alertDate DESC")
