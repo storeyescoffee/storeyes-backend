@@ -38,6 +38,10 @@ public class FirebaseToken {
     @Column(name = "token", nullable = false)
     private String token;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "platform", nullable = false, length = 20)
+    private Platform platform;
+
     @Column(name = "created_at", nullable = false)
     @CreationTimestamp
     private LocalDateTime createdAt;

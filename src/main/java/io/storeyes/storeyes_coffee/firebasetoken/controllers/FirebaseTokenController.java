@@ -22,10 +22,11 @@ public class FirebaseTokenController {
      *
      * Request body:
      * {
-     *   "token": "firebase-device-token-string"
+     *   "token": "firebase-device-token-string",
+     *   "platform": "IOS" | "ANDROID"
      * }
      *
-     * If a token exists for this user+store, it is updated; otherwise a new one is created.
+     * If a token exists for this user+store+platform, it is updated; otherwise a new one is created.
      */
     @PostMapping
     public ResponseEntity<FirebaseToken> upsertToken(@Valid @RequestBody UpsertFirebaseTokenRequest request) {

@@ -43,7 +43,7 @@ public class FirebaseTokenService {
                         "Store not found for user with id: " + userId));
 
         FirebaseToken existing = firebaseTokenRepository
-                .findByUser_IdAndStore_Id(userId, store.getId())
+                .findByUser_IdAndStore_IdAndPlatform(userId, store.getId(), request.getPlatform())
                 .orElse(null);
 
         if (existing != null) {
@@ -55,6 +55,7 @@ public class FirebaseTokenService {
                 .user(user)
                 .store(store)
                 .token(request.getToken())
+                .platform(request.getPlatform())
                 .build();
         return firebaseTokenRepository.save(newToken);
     }

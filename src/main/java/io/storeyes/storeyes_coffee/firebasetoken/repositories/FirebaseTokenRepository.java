@@ -1,6 +1,7 @@
 package io.storeyes.storeyes_coffee.firebasetoken.repositories;
 
 import io.storeyes.storeyes_coffee.firebasetoken.entities.FirebaseToken;
+import io.storeyes.storeyes_coffee.firebasetoken.entities.Platform;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -10,7 +11,7 @@ import java.util.Optional;
 public interface FirebaseTokenRepository extends JpaRepository<FirebaseToken, Long> {
 
     /**
-     * Find token by user ID and store ID for upsert logic
+     * Find token by user ID, store ID and platform for upsert logic
      */
-    Optional<FirebaseToken> findByUser_IdAndStore_Id(String userId, Long storeId);
+    Optional<FirebaseToken> findByUser_IdAndStore_IdAndPlatform(String userId, Long storeId, Platform platform);
 }
