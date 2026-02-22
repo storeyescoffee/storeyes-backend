@@ -13,6 +13,16 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      * Find all documents by store ID
      */
     List<Document> findByStore_Id(Long storeId);
+
+    /**
+     * Find all documents by store ID and category ID
+     */
+    List<Document> findByStore_IdAndCategory_Id(Long storeId, Long categoryId);
+
+    /**
+     * Find all documents that belong to a category (used when deleting category to unlink)
+     */
+    List<Document> findByCategory_Id(Long categoryId);
 }
 
 

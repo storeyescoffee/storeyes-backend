@@ -4,7 +4,9 @@ import io.storeyes.storeyes_coffee.documents.dto.CreateDocumentRequest;
 import io.storeyes.storeyes_coffee.documents.dto.DocumentDTO;
 import io.storeyes.storeyes_coffee.documents.dto.UpdateDocumentRequest;
 import io.storeyes.storeyes_coffee.documents.entities.Document;
+import io.storeyes.storeyes_coffee.documents.entities.DocumentCategory;
 import io.storeyes.storeyes_coffee.documents.mappers.DocumentMapper;
+import io.storeyes.storeyes_coffee.documents.repositories.DocumentCategoryRepository;
 import io.storeyes.storeyes_coffee.documents.repositories.DocumentRepository;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import io.storeyes.storeyes_coffee.store.entities.Store;
@@ -22,23 +24,24 @@ import java.util.List;
 public class DocumentService {
     
     private final DocumentRepository documentRepository;
+    private final DocumentCategoryRepository documentCategoryRepository;
     private final StoreRepository storeRepository;
     private final DocumentMapper documentMapper;
     private final S3Service s3Service;
     
     /**
-     * Get all documents for the current user's store
+     * Get all documents for the current user's store, optionally filtered by category.
      */
-    public List<DocumentDTO> getAllDocumentsByStore() {
+    public List<DocumentDTO> getAllDocumentsByStore(Long categoryId) {
         String userId = KeycloakTokenUtils.getUserId();
         if (userId == null) {
             throw new RuntimeException("User is not authenticated");
         }
-        
         Store store = storeRepository.findByOwner_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Store not found for current user"));
-        
-        List<Document> documents = documentRepository.findByStore_Id(store.getId());
+        List<Document> documents = categoryId != null
+                ? documentRepository.findByStore_IdAndCategory_Id(store.getId(), categoryId)
+                : documentRepository.findByStore_Id(store.getId());
         return documentMapper.toDTOList(documents);
     }
     
@@ -58,9 +61,16 @@ public class DocumentService {
         // Upload file to S3
         String fileUrl = s3Service.uploadFile(request.getFile(), store.getCode());
         
-        // Create document entity
+        DocumentCategory category = null;
+        if (request.getCategoryId() != null) {
+            category = documentCategoryRepository.findById(request.getCategoryId())
+                    .filter(c -> c.getStore().getId().equals(store.getId()))
+                    .orElse(null);
+        }
+        
         Document document = Document.builder()
                 .store(store)
+                .category(category)
                 .name(request.getName())
                 .description(request.getDescription())
                 .url(fileUrl)
@@ -101,6 +111,16 @@ public class DocumentService {
         // Update description if provided
         if (request.getDescription() != null) {
             document.setDescription(request.getDescription());
+        }
+        
+        // Update category: explicit unset, or set by id
+        if (Boolean.TRUE.equals(request.getUnsetCategory())) {
+            document.setCategory(null);
+        } else if (request.getCategoryId() != null) {
+            DocumentCategory category = documentCategoryRepository.findById(request.getCategoryId())
+                    .filter(c -> c.getStore().getId().equals(userStore.getId()))
+                    .orElse(null);
+            document.setCategory(category);
         }
         
         // Update file if provided

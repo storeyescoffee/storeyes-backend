@@ -20,12 +20,14 @@ public class DocumentController {
     private final DocumentService documentService;
     
     /**
-     * Get all documents for the current user's store
+     * Get all documents for the current user's store, optionally filtered by category.
      * GET /api/documents
+     * GET /api/documents?categoryId=1
      */
     @GetMapping
-    public ResponseEntity<List<DocumentDTO>> getAllDocuments() {
-        List<DocumentDTO> documents = documentService.getAllDocumentsByStore();
+    public ResponseEntity<List<DocumentDTO>> getAllDocuments(
+            @RequestParam(required = false) Long categoryId) {
+        List<DocumentDTO> documents = documentService.getAllDocumentsByStore(categoryId);
         return ResponseEntity.ok(documents);
     }
     

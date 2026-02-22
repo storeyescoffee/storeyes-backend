@@ -11,19 +11,13 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DocumentDTO {
-    
+public class DocumentCategoryDTO {
+
     private Long id;
     private Long storeId;
-    private String storeCode;
-    private Long categoryId;
-    private String categoryName;
     private String name;
     private String description;
-    private String url;
+    private Integer sortOrder;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
-
-
-
