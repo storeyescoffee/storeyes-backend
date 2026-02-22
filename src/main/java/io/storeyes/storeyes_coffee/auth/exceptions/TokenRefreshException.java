@@ -1,4 +1,4 @@
-package io.storeyes.storeyes_coffee.alerts.auth.exceptions;
+package io.storeyes.storeyes_coffee.auth.exceptions;
 
 /**
  * Exception thrown when token refresh fails

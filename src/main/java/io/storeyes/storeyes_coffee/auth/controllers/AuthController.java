@@ -1,4 +1,4 @@
-package io.storeyes.storeyes_coffee.alerts.auth.controllers;
+package io.storeyes.storeyes_coffee.auth.controllers;
 
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -6,14 +6,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import io.storeyes.storeyes_coffee.alerts.auth.dto.AuthErrorResponse;
-import io.storeyes.storeyes_coffee.alerts.auth.dto.AuthResponse;
-import io.storeyes.storeyes_coffee.alerts.auth.dto.LoginRequest;
-import io.storeyes.storeyes_coffee.alerts.auth.dto.LogoutRequest;
-import io.storeyes.storeyes_coffee.alerts.auth.dto.RefreshTokenRequest;
-import io.storeyes.storeyes_coffee.alerts.auth.dto.UserInfoDTO;
-import io.storeyes.storeyes_coffee.alerts.auth.exceptions.TokenRefreshException;
-import io.storeyes.storeyes_coffee.alerts.auth.services.AuthService;
+import io.storeyes.storeyes_coffee.auth.dto.AuthErrorResponse;
+import io.storeyes.storeyes_coffee.auth.dto.AuthResponse;
+import io.storeyes.storeyes_coffee.auth.dto.LoginRequest;
+import io.storeyes.storeyes_coffee.auth.dto.LogoutRequest;
+import io.storeyes.storeyes_coffee.auth.dto.RefreshTokenRequest;
+import io.storeyes.storeyes_coffee.auth.dto.UserInfoDTO;
+import io.storeyes.storeyes_coffee.auth.exceptions.TokenRefreshException;
+import io.storeyes.storeyes_coffee.auth.services.AuthService;
 
 /**
  * Authentication controller providing proxy endpoints for Keycloak authentication
