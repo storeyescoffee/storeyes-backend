@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UpsertFirebaseTokenRequest {
+public class CreateFirebaseTokenRequest {
 
     @NotBlank(message = "Token is required")
     private String token;

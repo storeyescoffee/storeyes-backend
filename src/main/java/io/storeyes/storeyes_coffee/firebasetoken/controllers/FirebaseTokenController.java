@@ -1,7 +1,6 @@
 package io.storeyes.storeyes_coffee.firebasetoken.controllers;
 
-import io.storeyes.storeyes_coffee.firebasetoken.dto.UpsertFirebaseTokenRequest;
-import io.storeyes.storeyes_coffee.firebasetoken.entities.FirebaseToken;
+import io.storeyes.storeyes_coffee.firebasetoken.dto.CreateFirebaseTokenRequest;
 import io.storeyes.storeyes_coffee.firebasetoken.services.FirebaseTokenService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +15,7 @@ public class FirebaseTokenController {
     private final FirebaseTokenService firebaseTokenService;
 
     /**
-     * Upsert Firebase token for the authenticated user and their store.
+     * Insert Firebase token for the authenticated user and their store.
      * POST /api/firebase-tokens
      * Requires: JWT token in Authorization header (user and store are derived from it)
      *
@@ -26,11 +25,23 @@ public class FirebaseTokenController {
      *   "platform": "IOS" | "ANDROID"
      * }
      *
-     * If a token exists for this user+store+platform, it is updated; otherwise a new one is created.
+     * Always creates a new token record and returns the generated sessionId as a plain string.
      */
     @PostMapping
-    public ResponseEntity<FirebaseToken> upsertToken(@Valid @RequestBody UpsertFirebaseTokenRequest request) {
-        FirebaseToken result = firebaseTokenService.upsertToken(request);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<String> upsertToken(@Valid @RequestBody CreateFirebaseTokenRequest request) {
+        String sessionId = firebaseTokenService.upsertToken(request);
+        return ResponseEntity.ok(sessionId);
+    }
+
+    /**
+     * Revoke (delete) a Firebase token by its sessionId for the current user.
+     * DELETE /api/firebase-tokens/{sessionId}
+     *
+     * Returns 204 No Content on success, 404 if no token is found for this user+sessionId.
+     */
+    @DeleteMapping("/{sessionId}")
+    public ResponseEntity<Void> revokeBySessionId(@PathVariable String sessionId) {
+        firebaseTokenService.revokeBySessionId(sessionId);
+        return ResponseEntity.noContent().build();
     }
 }

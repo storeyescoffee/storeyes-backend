@@ -14,4 +14,9 @@ public interface FirebaseTokenRepository extends JpaRepository<FirebaseToken, Lo
      * Find token by user ID, store ID and platform for upsert logic
      */
     Optional<FirebaseToken> findByUser_IdAndStore_IdAndPlatform(String userId, Long storeId, Platform platform);
+
+    /**
+     * Find token by sessionId
+     */
+    Optional<FirebaseToken> findBySessionId(String sessionId);
 }

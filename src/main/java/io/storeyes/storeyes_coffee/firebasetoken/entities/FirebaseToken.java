@@ -34,6 +34,9 @@ public class FirebaseToken {
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private UserInfo user;
+
+    @Column(name = "session_id", nullable = false, unique = true)
+    private String sessionId;
     
     @Column(name = "token", nullable = false)
     private String token;
