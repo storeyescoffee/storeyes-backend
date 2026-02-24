@@ -1,9 +1,9 @@
 package io.storeyes.storeyes_coffee.charges.services;
 
+import io.storeyes.storeyes_coffee.auth.entities.UserPreference;
+import io.storeyes.storeyes_coffee.auth.repositories.UserPreferenceRepository;
 import io.storeyes.storeyes_coffee.charges.dto.*;
 import io.storeyes.storeyes_coffee.charges.entities.*;
-import io.storeyes.storeyes_coffee.alerts.auth.entities.UserPreference;
-import io.storeyes.storeyes_coffee.alerts.auth.repositories.UserPreferenceRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.FixedChargeRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.PersonnelEmployeeRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.PersonnelWeekSalaryRepository;

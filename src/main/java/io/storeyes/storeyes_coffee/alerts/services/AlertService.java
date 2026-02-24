@@ -35,18 +35,17 @@ public class AlertService {
      * If alertType is null, defaults to NOT_TAPPED
      */
     public void createAlert(CreateAlertRequest request) {
-        // Determine alertType first (default to NOT_TAPPED if null)
+        // Get store by code
+        var store = storeRepository.findByCode(request.getStoreCode())
+                .orElseThrow(() -> new RuntimeException("Store not found with code: " + request.getStoreCode()));
+        
+        // Determine alertType (default to NOT_TAPPED if null)
         io.storeyes.storeyes_coffee.alerts.entities.AlertType alertType = request.getAlertType() != null 
                 ? request.getAlertType() 
                 : io.storeyes.storeyes_coffee.alerts.entities.AlertType.NOT_TAPPED;
         
-        // Check if an alert with the same alertDate and alertType already exists
-        // Skip store lookup if duplicate exists
-        if (alertRepository.findByExactAlertDateAndAlertType(request.getAlertDate(), alertType).isEmpty()) {
-            // Get store by code
-            var store = storeRepository.findByCode(request.getStoreCode())
-                    .orElseThrow(() -> new RuntimeException("Store not found with code: " + request.getStoreCode()));
-            
+        // Check if an alert with the same alertDate, alertType, and storeId already exists
+        if (alertRepository.findByExactAlertDateAndAlertTypeAndStoreId(request.getAlertDate(), alertType, store.getId()).isEmpty()) {
             // No existing alert found, create a new one
             Alert alert = Alert.builder()
                     .alertDate(request.getAlertDate())

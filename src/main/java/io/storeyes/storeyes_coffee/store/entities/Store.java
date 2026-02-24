@@ -8,7 +8,7 @@ import lombok.Builder;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import io.storeyes.storeyes_coffee.alerts.auth.entities.UserInfo;
+import io.storeyes.storeyes_coffee.auth.entities.UserInfo;
 
 import java.time.LocalDateTime;
 

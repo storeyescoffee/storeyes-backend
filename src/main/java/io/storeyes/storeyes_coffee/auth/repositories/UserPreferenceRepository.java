@@ -1,9 +1,10 @@
-package io.storeyes.storeyes_coffee.alerts.auth.repositories;
+package io.storeyes.storeyes_coffee.auth.repositories;
 
-import io.storeyes.storeyes_coffee.alerts.auth.entities.UserPreference;
-import io.storeyes.storeyes_coffee.alerts.auth.entities.UserPreferenceId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import io.storeyes.storeyes_coffee.auth.entities.UserPreference;
+import io.storeyes.storeyes_coffee.auth.entities.UserPreferenceId;
 
 import java.util.Optional;
 

@@ -1,11 +1,12 @@
-package io.storeyes.storeyes_coffee.alerts.auth.services;
+package io.storeyes.storeyes_coffee.auth.services;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.storeyes.storeyes_coffee.alerts.auth.dto.AuthResponse;
-import io.storeyes.storeyes_coffee.alerts.auth.dto.UserInfoDTO;
-import io.storeyes.storeyes_coffee.alerts.auth.entities.UserInfo;
-import io.storeyes.storeyes_coffee.alerts.auth.exceptions.TokenRefreshException;
-import io.storeyes.storeyes_coffee.alerts.auth.repositories.UserInfoRepository;
+
+import io.storeyes.storeyes_coffee.auth.dto.AuthResponse;
+import io.storeyes.storeyes_coffee.auth.dto.UserInfoDTO;
+import io.storeyes.storeyes_coffee.auth.entities.UserInfo;
+import io.storeyes.storeyes_coffee.auth.exceptions.TokenRefreshException;
+import io.storeyes.storeyes_coffee.auth.repositories.UserInfoRepository;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
