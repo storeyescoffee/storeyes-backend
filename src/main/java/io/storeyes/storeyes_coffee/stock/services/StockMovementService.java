@@ -18,6 +18,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,29 +40,59 @@ public class StockMovementService {
     }
 
     /**
-     * Record a PURCHASE movement when a variable charge with a product is saved.
-     * Uses quantity and amount (total price) from the charge.
+     * Create or update the PURCHASE movement linked to a variable charge.
+     * - One movement per variable charge (reference_type + reference_id).
+     * - If the charge has no valid product/quantity, the movement is removed.
      */
     @Transactional
-    public void recordPurchase(VariableCharge charge) {
-        if (charge.getProduct() == null || charge.getQuantity() == null || charge.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+    public void syncPurchaseForVariableCharge(VariableCharge charge) {
+        if (charge == null || charge.getId() == null) {
             return;
         }
-        if (stockMovementRepository.existsByReferenceTypeAndReferenceId(REFERENCE_TYPE_VARIABLE_CHARGE, charge.getId())) {
+
+        Optional<StockMovement> existingOpt =
+                stockMovementRepository.findByReferenceTypeAndReferenceId(REFERENCE_TYPE_VARIABLE_CHARGE, charge.getId());
+
+        boolean hasProductAndQuantity =
+                charge.getProduct() != null
+                        && charge.getQuantity() != null
+                        && charge.getQuantity().compareTo(BigDecimal.ZERO) > 0;
+
+        // If we no longer have a valid product/quantity, remove the movement (undo its effect on stock)
+        if (!hasProductAndQuantity) {
+            existingOpt.ifPresent(stockMovementRepository::delete);
             return;
         }
-        StockMovement movement = StockMovement.builder()
-                .store(charge.getStore())
-                .product(charge.getProduct())
-                .type(StockMovementType.PURCHASE)
-                .quantity(charge.getQuantity())
-                .amount(charge.getAmount() != null ? charge.getAmount() : null)
-                .movementDate(charge.getDate() != null ? charge.getDate() : LocalDate.now())
-                .referenceType(REFERENCE_TYPE_VARIABLE_CHARGE)
-                .referenceId(charge.getId())
-                .notes(null)
-                .build();
+
+        StockMovement movement = existingOpt.orElseGet(() ->
+                StockMovement.builder()
+                        .referenceType(REFERENCE_TYPE_VARIABLE_CHARGE)
+                        .referenceId(charge.getId())
+                        .build()
+        );
+
+        movement.setStore(charge.getStore());
+        movement.setProduct(charge.getProduct());
+        movement.setType(StockMovementType.PURCHASE);
+        movement.setQuantity(charge.getQuantity());
+        movement.setAmount(charge.getAmount() != null ? charge.getAmount() : null);
+        movement.setMovementDate(charge.getDate() != null ? charge.getDate() : LocalDate.now());
+
         stockMovementRepository.save(movement);
+    }
+
+    /**
+     * Delete all movements linked to a variable charge. Used when the charge is deleted.
+     */
+    @Transactional
+    public void deleteMovementsForVariableCharge(Long variableChargeId) {
+        if (variableChargeId == null) {
+            return;
+        }
+        stockMovementRepository.deleteByReferenceTypeAndReferenceId(
+                REFERENCE_TYPE_VARIABLE_CHARGE,
+                variableChargeId
+        );
     }
 
     /**

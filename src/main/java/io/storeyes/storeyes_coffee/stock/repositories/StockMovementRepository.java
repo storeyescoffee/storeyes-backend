@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface StockMovementRepository extends JpaRepository<StockMovement, Long> {
@@ -15,6 +16,10 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     List<StockMovement> findByStoreIdAndProductIdOrderByMovementDateDescIdDesc(Long storeId, Long productId);
 
     boolean existsByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
+
+    Optional<StockMovement> findByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
+
+    void deleteByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
 
     /**
      * Inventory summary per product for a store: current quantity and total purchase amount/quantity for average cost.

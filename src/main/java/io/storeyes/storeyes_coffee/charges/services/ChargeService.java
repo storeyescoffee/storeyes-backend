@@ -597,7 +597,7 @@ public class ChargeService {
                 .build();
 
         VariableCharge savedCharge = variableChargeRepository.save(charge);
-        stockMovementService.recordPurchase(savedCharge);
+        stockMovementService.syncPurchaseForVariableCharge(savedCharge);
         return toVariableChargeResponse(savedCharge);
     }
 
@@ -689,6 +689,7 @@ public class ChargeService {
         }
 
         VariableCharge updatedCharge = variableChargeRepository.save(charge);
+        stockMovementService.syncPurchaseForVariableCharge(updatedCharge);
         return toVariableChargeResponse(updatedCharge);
     }
 
@@ -708,6 +709,8 @@ public class ChargeService {
             throw new RuntimeException("Variable charge not found with id: " + id);
         }
 
+        // Remove linked stock movements so inventory reflects the deletion
+        stockMovementService.deleteMovementsForVariableCharge(id);
         variableChargeRepository.deleteById(id);
     }
 
