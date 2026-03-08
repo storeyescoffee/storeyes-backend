@@ -34,7 +34,8 @@ public class ManualConsumptionRequest {
     @DecimalMin(value = "0", inclusive = true, message = "Counting quantity must be 0 or positive")
     private BigDecimal countingQuantity;
 
-    /** Optional amount (MAD) for value tracking. Default 0. */
+    /** Amount (MAD) for the consumed stock value. Required. */
+    @NotNull(message = "Amount is required")
     @DecimalMin(value = "0", inclusive = true, message = "Amount must be 0 or positive")
     private BigDecimal amount;
 

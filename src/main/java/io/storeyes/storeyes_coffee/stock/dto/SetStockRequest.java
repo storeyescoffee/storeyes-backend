@@ -34,10 +34,8 @@ public class SetStockRequest {
     @DecimalMin(value = "0", inclusive = true, message = "Counting quantity must be 0 or positive")
     private BigDecimal countingQuantity;
 
-    /**
-     * Optional amount (MAD) for the adjustment. Used for inventory value tracking.
-     * If not provided, stored as 0.
-     */
+    /** Amount (MAD) for the adjustment. Required for inventory value. */
+    @NotNull(message = "Amount is required")
     @DecimalMin(value = "0", inclusive = true, message = "Amount must be 0 or positive")
     private BigDecimal amount;
 }

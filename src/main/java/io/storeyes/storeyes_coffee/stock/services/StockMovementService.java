@@ -109,8 +109,8 @@ public class StockMovementService {
     }
 
     /**
-     * Inventory summary: all store products with estimated (system) and real (validated count) stock.
-     * Value is amount-based (average cost from PURCHASE movements), not product.unit_price.
+     * Inventory summary: all store products with quantity and value.
+     * Value = sum of amounts from movements (PURCHASE + ADJUSTMENT add, CONSUMPTION subtracts).
      */
     public List<StockInventoryItemResponse> getInventorySummary() {
         Long storeId = getStoreId();
@@ -129,18 +129,11 @@ public class StockMovementService {
                 .map(product -> {
                     Object[] r = summaryByProductId.get(product.getId());
                     BigDecimal estimatedQuantity = BigDecimal.ZERO;
-                    BigDecimal totalPurchaseAmount = BigDecimal.ZERO;
-                    BigDecimal totalPurchaseQuantity = BigDecimal.ZERO;
+                    BigDecimal estimatedValue = BigDecimal.ZERO;
                     if (r != null) {
                         estimatedQuantity = r[1] != null ? new BigDecimal(r[1].toString()) : BigDecimal.ZERO;
-                        totalPurchaseAmount = r[2] != null ? new BigDecimal(r[2].toString()) : BigDecimal.ZERO;
-                        totalPurchaseQuantity = r[3] != null ? new BigDecimal(r[3].toString()) : BigDecimal.ZERO;
+                        estimatedValue = r[2] != null ? new BigDecimal(r[2].toString()).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
                     }
-                    BigDecimal averageUnitCost = BigDecimal.ZERO;
-                    if (totalPurchaseQuantity.compareTo(BigDecimal.ZERO) > 0 && totalPurchaseAmount.compareTo(BigDecimal.ZERO) > 0) {
-                        averageUnitCost = totalPurchaseAmount.divide(totalPurchaseQuantity, 4, RoundingMode.HALF_UP);
-                    }
-                    BigDecimal estimatedValue = estimatedQuantity.multiply(averageUnitCost).setScale(2, RoundingMode.HALF_UP);
 
                     BigDecimal basePerCounting = product.getBasePerCountingUnit();
                     BigDecimal estimatedQuantityCounting = null;
@@ -150,19 +143,21 @@ public class StockMovementService {
 
                     BigDecimal realQuantity = null;
                     BigDecimal realQuantityCounting = null;
-                    BigDecimal realValue = null;
+                    BigDecimal realValue = estimatedValue;
                     StockInventorySnapshot lastSnapshot = latestSnapshotByProductId.get(product.getId());
                     if (lastSnapshot != null) {
                         LocalDate snapshotDate = lastSnapshot.getCreatedAt().toLocalDate();
                         BigDecimal movementsAfter = stockMovementRepository.sumQuantityAfterDate(storeId, product.getId(), snapshotDate);
                         realQuantity = lastSnapshot.getBaseQuantity().add(movementsAfter != null ? movementsAfter : BigDecimal.ZERO);
-                        realValue = realQuantity.multiply(averageUnitCost).setScale(2, RoundingMode.HALF_UP);
                         if (basePerCounting != null && basePerCounting.compareTo(BigDecimal.ZERO) > 0) {
                             realQuantityCounting = realQuantity.divide(basePerCounting, 4, RoundingMode.HALF_UP);
                         }
                     }
 
-                    BigDecimal varianceValue = (realValue != null) ? realValue.subtract(estimatedValue) : null;
+                    BigDecimal averageUnitCost = BigDecimal.ZERO;
+                    if (estimatedQuantity.compareTo(BigDecimal.ZERO) > 0 && estimatedValue.compareTo(BigDecimal.ZERO) > 0) {
+                        averageUnitCost = estimatedValue.divide(estimatedQuantity, 4, RoundingMode.HALF_UP);
+                    }
 
                     return StockInventoryItemResponse.builder()
                             .productId(product.getId())
@@ -179,8 +174,8 @@ public class StockMovementService {
                             .realQuantity(realQuantity)
                             .realQuantityCounting(realQuantityCounting)
                             .realValue(realValue)
-                            .varianceValue(varianceValue)
-                            .totalPurchaseAmount(totalPurchaseAmount)
+                            .varianceValue(null)
+                            .totalPurchaseAmount(BigDecimal.ZERO)
                             .averageUnitCost(averageUnitCost)
                             .build();
                 })

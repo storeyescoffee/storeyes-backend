@@ -23,13 +23,17 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     void deleteByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
 
     /**
-     * Inventory summary per product for a store: current quantity and total purchase amount/quantity for average cost.
+     * Inventory summary per product: quantity and total value from movement amounts.
+     * Value = sum of amounts: PURCHASE and ADJUSTMENT add, CONSUMPTION subtracts.
      */
     @Query(value = """
         SELECT sm.product_id AS product_id,
                COALESCE(SUM(sm.quantity), 0) AS current_quantity,
-               COALESCE(SUM(CASE WHEN sm.type = 'PURCHASE' THEN sm.amount ELSE NULL END), 0) AS total_purchase_amount,
-               COALESCE(SUM(CASE WHEN sm.type = 'PURCHASE' THEN sm.quantity ELSE 0 END), 0) AS total_purchase_quantity
+               COALESCE(SUM(
+                 CASE WHEN sm.type = 'PURCHASE' OR sm.type = 'ADJUSTMENT' THEN COALESCE(sm.amount, 0)
+                      WHEN sm.type = 'CONSUMPTION' THEN -COALESCE(sm.amount, 0)
+                      ELSE 0 END
+               ), 0) AS total_value
         FROM stock_movements sm
         WHERE sm.store_id = :storeId
         GROUP BY sm.product_id
