@@ -18,5 +18,10 @@ public class AuthResponse {
     private String refreshToken;
     private Long expiresIn; // Expiration time in seconds
     private String tokenType; // Usually "Bearer"
+    
+    /** Store code from the user's role mapping. Null if user has no store. */
+    private String storeCode;
+    /** Role name (e.g. OWNER). Null if user has no store. */
+    private String role;
 }
 

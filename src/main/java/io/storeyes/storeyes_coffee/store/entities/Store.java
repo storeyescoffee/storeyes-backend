@@ -8,8 +8,6 @@ import lombok.Builder;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import io.storeyes.storeyes_coffee.auth.entities.UserInfo;
-
 import java.time.LocalDateTime;
 
 @Data
@@ -27,10 +25,6 @@ public class Store {
 
     @Column(name = "code", nullable = false)
     private String code;
-
-    @ManyToOne
-    @JoinColumn(name = "owner_id", nullable = false)
-    private UserInfo owner;
 
     @Column(name = "name", nullable = false)
     private String name;

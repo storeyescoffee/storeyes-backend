@@ -5,9 +5,10 @@ import io.storeyes.storeyes_coffee.auth.repositories.UserInfoRepository;
 import io.storeyes.storeyes_coffee.firebasetoken.dto.CreateFirebaseTokenRequest;
 import io.storeyes.storeyes_coffee.firebasetoken.entities.FirebaseToken;
 import io.storeyes.storeyes_coffee.firebasetoken.repositories.FirebaseTokenRepository;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import io.storeyes.storeyes_coffee.store.entities.Store;
-import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,7 +23,7 @@ public class FirebaseTokenService {
 
     private final FirebaseTokenRepository firebaseTokenRepository;
     private final UserInfoRepository userInfoRepository;
-    private final StoreRepository storeRepository;
+    private final StoreService storeService;
 
     /**
      * Inserts a Firebase token for the authenticated user and their store.
@@ -40,9 +41,11 @@ public class FirebaseTokenService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "User not found with id: " + userId));
 
-        Store store = storeRepository.findByOwner_Id(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Store not found for user with id: " + userId));
+        Long storeId = CurrentStoreContext.getCurrentStoreId();
+        if (storeId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Store context not found for current user");
+        }
+        Store store = storeService.getStoreEntityById(storeId);
 
         String sessionId = UUID.randomUUID().toString();
 

@@ -7,10 +7,13 @@ import io.storeyes.storeyes_coffee.auth.dto.UserInfoDTO;
 import io.storeyes.storeyes_coffee.auth.entities.UserInfo;
 import io.storeyes.storeyes_coffee.auth.exceptions.TokenRefreshException;
 import io.storeyes.storeyes_coffee.auth.repositories.UserInfoRepository;
+import io.storeyes.storeyes_coffee.rolemapping.repositories.RoleMappingRepository;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -31,6 +34,8 @@ public class AuthService {
 
     private final RestTemplate restTemplate;
     private final UserInfoRepository userInfoRepository;
+    private final RoleMappingRepository roleMappingRepository;
+    private final JwtDecoder jwtDecoder;
     private final ObjectMapper objectMapper;
     
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
@@ -46,9 +51,12 @@ public class AuthService {
     @Value("${spring.security.oauth2.resourceserver.jwt.audience}")
     private String clientId;
     
-    public AuthService(RestTemplate restTemplate, UserInfoRepository userInfoRepository) {
+    public AuthService(RestTemplate restTemplate, UserInfoRepository userInfoRepository,
+                       RoleMappingRepository roleMappingRepository, JwtDecoder jwtDecoder) {
         this.restTemplate = restTemplate;
         this.userInfoRepository = userInfoRepository;
+        this.roleMappingRepository = roleMappingRepository;
+        this.jwtDecoder = jwtDecoder;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -86,12 +94,13 @@ public class AuthService {
                 throw new RuntimeException("Empty response from Keycloak");
             }
             
-            return AuthResponse.builder()
+            AuthResponse.AuthResponseBuilder builder = AuthResponse.builder()
                 .accessToken((String) responseBody.get("access_token"))
                 .refreshToken((String) responseBody.get("refresh_token"))
                 .expiresIn(getExpiresIn(responseBody))
-                .tokenType((String) responseBody.getOrDefault("token_type", "Bearer"))
-                .build();
+                .tokenType((String) responseBody.getOrDefault("token_type", "Bearer"));
+            enrichWithStoreAttributes(builder, (String) responseBody.get("access_token"));
+            return builder.build();
                 
         } catch (HttpClientErrorException.Unauthorized e) {
             throw new RuntimeException("Invalid username or password", e);
@@ -153,12 +162,13 @@ public class AuthService {
                 newRefreshToken = refreshToken;
             }
             
-            return AuthResponse.builder()
+            AuthResponse.AuthResponseBuilder builder = AuthResponse.builder()
                 .accessToken((String) responseBody.get("access_token"))
                 .refreshToken(newRefreshToken)
                 .expiresIn(getExpiresIn(responseBody))
-                .tokenType((String) responseBody.getOrDefault("token_type", "Bearer"))
-                .build();
+                .tokenType((String) responseBody.getOrDefault("token_type", "Bearer"));
+            enrichWithStoreAttributes(builder, (String) responseBody.get("access_token"));
+            return builder.build();
                 
         } catch (HttpClientErrorException e) {
             // Log the error for debugging
@@ -305,6 +315,29 @@ public class AuthService {
         }
         
         return builder.build();
+    }
+
+    /**
+     * Enrich AuthResponse builder with storeCode and role from the user's role mapping.
+     * Decodes the access token to get user ID (sub), then looks up RoleMapping.
+     */
+    private void enrichWithStoreAttributes(AuthResponse.AuthResponseBuilder builder, String accessToken) {
+        if (accessToken == null || accessToken.isEmpty()) {
+            return;
+        }
+        try {
+            Jwt jwt = jwtDecoder.decode(accessToken);
+            String userId = jwt.getSubject();
+            if (userId == null) {
+                return;
+            }
+            roleMappingRepository.findFirstByUser_Id(userId).ifPresent(rm -> {
+                builder.storeCode(rm.getStore().getCode());
+                builder.role(rm.getRole().getName());
+            });
+        } catch (Exception e) {
+            log.debug("Could not enrich auth response with store attributes: {}", e.getMessage());
+        }
     }
 
     /**

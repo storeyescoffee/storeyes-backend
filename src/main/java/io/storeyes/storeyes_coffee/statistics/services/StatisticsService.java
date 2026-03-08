@@ -11,9 +11,8 @@ import io.storeyes.storeyes_coffee.kpi.entities.DateDimension;
 import io.storeyes.storeyes_coffee.kpi.entities.FactKpiDaily;
 import io.storeyes.storeyes_coffee.kpi.repositories.DateDimensionRepository;
 import io.storeyes.storeyes_coffee.kpi.repositories.FactKpiDailyRepository;
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.statistics.dto.*;
-import io.storeyes.storeyes_coffee.store.services.StoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -39,7 +38,6 @@ public class StatisticsService {
     private final DateDimensionRepository dateDimensionRepository;
     private final FixedChargeRepository fixedChargeRepository;
     private final VariableChargeRepository variableChargeRepository;
-    private final StoreService storeService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");
@@ -612,13 +610,13 @@ public class StatisticsService {
     }
 
     /**
-     * Get store ID from authenticated user
+     * Get store ID from store context (set by StoreContextInterceptor).
      */
     private Long getStoreId() {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
+        Long storeId = CurrentStoreContext.getCurrentStoreId();
+        if (storeId == null) {
+            throw new RuntimeException("Store context not found for current user");
         }
-        return storeService.getStoreByOwnerId(userId).getId();
+        return storeId;
     }
 }

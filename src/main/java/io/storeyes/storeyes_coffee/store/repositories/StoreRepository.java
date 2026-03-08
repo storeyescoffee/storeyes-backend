@@ -14,11 +14,6 @@ public interface StoreRepository extends JpaRepository<Store, Long>, JpaSpecific
      * Find store by code
      */
     Optional<Store> findByCode(String code);
-    
-    /**
-     * Find store by owner ID (Keycloak user ID)
-     */
-    Optional<Store> findByOwner_Id(String ownerId);
 }
 
 

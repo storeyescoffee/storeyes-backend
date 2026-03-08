@@ -8,9 +8,8 @@ import io.storeyes.storeyes_coffee.alerts.entities.Alert;
 import io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement;
 import io.storeyes.storeyes_coffee.alerts.mappers.AlertMapper;
 import io.storeyes.storeyes_coffee.alerts.repositories.AlertRepository;
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
-import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,7 +26,6 @@ public class AlertService {
     private final AlertRepository alertRepository;
     private final AlertMapper alertMapper;
     private final StoreRepository storeRepository;
-    private final StoreService storeService;
     
     /**
      * Create a new alert
@@ -63,28 +61,23 @@ public class AlertService {
     
     /**
      * Get alerts by date and processed status (supports both exact date and date range)
+     * Store is resolved from CurrentStoreContext (set by StoreContextInterceptor).
      * By default returns processed alerts, unless unprocessed=true
      * If date is not provided, defaults to today's date
-     * Optionally filters by store_id if provided, otherwise uses authenticated user's store
      * If returnType=true, returns only alerts with alertType=RETURN
      * If alertType is provided (NOT_TAPPED or RETURN), returns only alerts of that type (takes precedence over returnType)
      */
-    public List<Alert> getAlertsByDate(LocalDateTime date, LocalDateTime endDate, Boolean unprocessed, Long storeId, Boolean returnType, io.storeyes.storeyes_coffee.alerts.entities.AlertType alertType) {
+    public List<Alert> getAlertsByDate(LocalDateTime date, LocalDateTime endDate, Boolean unprocessed, Boolean returnType, io.storeyes.storeyes_coffee.alerts.entities.AlertType alertType) {
+        Long storeId = CurrentStoreContext.getCurrentStoreId();
+        if (storeId == null) {
+            throw new RuntimeException("Store context not found for current user");
+        }
         boolean filterUnprocessed = Boolean.TRUE.equals(unprocessed);
         boolean filterReturnType = Boolean.TRUE.equals(returnType);
         // alertType param takes precedence; if not set, fall back to returnType for backward compat
         io.storeyes.storeyes_coffee.alerts.entities.AlertType filterAlertType = alertType != null
                 ? alertType
                 : (filterReturnType ? io.storeyes.storeyes_coffee.alerts.entities.AlertType.RETURN : null);
-        
-        // If storeId is not provided, get it from the authenticated user's store
-        if (storeId == null) {
-            String userId = KeycloakTokenUtils.getUserId();
-            if (userId == null) {
-                throw new RuntimeException("User is not authenticated");
-            }
-            storeId = storeService.getStoreByOwnerId(userId).getId();
-        }
         
         // Default to today's date if not provided
         if (date == null) {
@@ -94,34 +87,18 @@ public class AlertService {
         List<Alert> alerts;
         // Date filter is provided (or defaulted to today)
         if (endDate != null) {
-            // Date range provided
-            if (storeId != null) {
-                if (filterUnprocessed) {
-                    alerts = alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
-                } else {
-                    alerts = alertRepository.findProcessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
-                }
+            // Date range
+            if (filterUnprocessed) {
+                alerts = alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
             } else {
-                if (filterUnprocessed) {
-                    alerts = alertRepository.findUnprocessedByAlertDateBetween(date, endDate);
-                } else {
-                    alerts = alertRepository.findProcessedByAlertDateBetween(date, endDate);
-                }
+                alerts = alertRepository.findProcessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
             }
         } else {
-            // Exact date provided (or defaulted to today)
-            if (storeId != null) {
-                if (filterUnprocessed) {
-                    alerts = alertRepository.findUnprocessedByAlertDateAndStoreId(date, storeId);
-                } else {
-                    alerts = alertRepository.findProcessedByAlertDateAndStoreId(date, storeId);
-                }
+            // Exact date (or defaulted to today)
+            if (filterUnprocessed) {
+                alerts = alertRepository.findUnprocessedByAlertDateAndStoreId(date, storeId);
             } else {
-                if (filterUnprocessed) {
-                    alerts = alertRepository.findUnprocessedByAlertDate(date);
-                } else {
-                    alerts = alertRepository.findProcessedByAlertDate(date);
-                }
+                alerts = alertRepository.findProcessedByAlertDateAndStoreId(date, storeId);
             }
         }
         

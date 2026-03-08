@@ -2,9 +2,7 @@ package io.storeyes.storeyes_coffee.alerts.controllers;
 
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDetailsDTO;
-import io.storeyes.storeyes_coffee.alerts.dto.CreateAlertRequest;
 import io.storeyes.storeyes_coffee.alerts.dto.UpdateHumanJudgementRequest;
-import io.storeyes.storeyes_coffee.alerts.dto.UpdateSecondaryVideoRequest;
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
 import io.storeyes.storeyes_coffee.alerts.entities.AlertType;
 import io.storeyes.storeyes_coffee.alerts.mappers.AlertMapper;
@@ -27,51 +25,18 @@ public class AlertController {
     private final AlertService alertService;
     private final AlertMapper alertMapper;
     
-    /**
-     * Create a new alert
-     * POST /api/alerts
-     */
-    @PostMapping
-    public ResponseEntity<Void> createAlert(@Valid @RequestBody CreateAlertRequest request) {
-        alertService.createAlert(request);
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
-    }
-    
-
     @GetMapping
     public ResponseEntity<List<AlertDTO>> getAlertsByDate(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(required = false) Boolean unprocessed,
-            @RequestParam(required = false) Long store_id,
             @RequestParam(required = false) Boolean returnType,
             @RequestParam(required = false) AlertType alertType) {
-        List<Alert> alerts = alertService.getAlertsByDate(date, endDate, unprocessed, store_id, returnType, alertType);
+        List<Alert> alerts = alertService.getAlertsByDate(date, endDate, unprocessed, returnType, alertType);
         List<AlertDTO> alertDTOs = alertMapper.toDTOList(alerts);
         return ResponseEntity.ok(alertDTOs);
     }
 
-    
-
-    
-    
-    /**
-     * Update secondary video URL, image URL and mark alert as processed
-     * PUT /api/alerts/{id}/secondary-video
-     */
-    @PutMapping("/{id}/secondary-video")
-    public ResponseEntity<Void> updateSecondaryVideoAndMarkProcessed(
-            @PathVariable Long id,
-            @Valid @RequestBody UpdateSecondaryVideoRequest request) {
-        boolean updated = alertService.updateSecondaryVideoAndMarkProcessed(id, request.getSecondaryVideoUrl(), request.getImageUrl());
-        
-        if (updated) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
-        } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
-    }
-    
     /**
      * Update human judgement for an alert
      * PATCH /api/alerts/{id}/human-judgement

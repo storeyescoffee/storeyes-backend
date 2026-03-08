@@ -8,9 +8,9 @@ import io.storeyes.storeyes_coffee.documents.entities.DocumentCategory;
 import io.storeyes.storeyes_coffee.documents.mappers.DocumentCategoryMapper;
 import io.storeyes.storeyes_coffee.documents.repositories.DocumentCategoryRepository;
 import io.storeyes.storeyes_coffee.documents.repositories.DocumentRepository;
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.store.entities.Store;
-import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.StoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,29 +25,19 @@ public class DocumentCategoryService {
 
     private final DocumentCategoryRepository categoryRepository;
     private final DocumentRepository documentRepository;
-    private final StoreRepository storeRepository;
+    private final StoreService storeService;
     private final DocumentCategoryMapper categoryMapper;
 
     @Transactional(readOnly = true)
     public List<DocumentCategoryDTO> getAllCategoriesByStore() {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
-        Store store = storeRepository.findByOwner_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Store not found for current user"));
+        Store store = getCurrentStore();
         List<DocumentCategory> categories = categoryRepository.findByStore_IdOrderBySortOrderAscNameAsc(store.getId());
         return categoryMapper.toDTOList(categories);
     }
 
     @Transactional
     public DocumentCategoryDTO createCategory(CreateDocumentCategoryRequest request) {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
-        Store store = storeRepository.findByOwner_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Store not found for current user"));
+        Store store = getCurrentStore();
 
         Integer sortOrder = request.getSortOrder() != null ? request.getSortOrder() : 0;
         DocumentCategory category = DocumentCategory.builder()
@@ -63,14 +53,9 @@ public class DocumentCategoryService {
 
     @Transactional
     public DocumentCategoryDTO updateCategory(Long id, UpdateDocumentCategoryRequest request) {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
+        Store userStore = getCurrentStore();
         DocumentCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Document category not found with id: " + id));
-        Store userStore = storeRepository.findByOwner_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Store not found for current user"));
         if (!category.getStore().getId().equals(userStore.getId())) {
             throw new RuntimeException("Category does not belong to your store");
         }
@@ -91,14 +76,9 @@ public class DocumentCategoryService {
 
     @Transactional
     public void deleteCategory(Long id) {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
+        Store userStore = getCurrentStore();
         DocumentCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Document category not found with id: " + id));
-        Store userStore = storeRepository.findByOwner_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Store not found for current user"));
         if (!category.getStore().getId().equals(userStore.getId())) {
             throw new RuntimeException("Category does not belong to your store");
         }
@@ -110,5 +90,13 @@ public class DocumentCategoryService {
         documentRepository.saveAll(documentsInCategory);
         categoryRepository.delete(category);
         log.info("Document category deleted with ID: {}", id);
+    }
+
+    private Store getCurrentStore() {
+        Long storeId = CurrentStoreContext.getCurrentStoreId();
+        if (storeId == null) {
+            throw new RuntimeException("Store context not found for current user");
+        }
+        return storeService.getStoreEntityById(storeId);
     }
 }
