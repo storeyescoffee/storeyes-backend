@@ -57,6 +57,7 @@ public class StockMovementService {
      * Create or update the PURCHASE movement linked to a variable charge.
      * - One movement per variable charge (reference_type + reference_id).
      * - If the charge has no valid product/quantity, the movement is removed.
+     * - Only raw-material stock products (bar, kitchen, freezer, soda) are tracked in stock.
      */
     @Transactional
     public void syncPurchaseForVariableCharge(VariableCharge charge) {
@@ -74,6 +75,24 @@ public class StockMovementService {
 
         // If we no longer have a valid product/quantity, remove the movement (undo its effect on stock)
         if (!hasProductAndQuantity) {
+            existingOpt.ifPresent(stockMovementRepository::delete);
+            return;
+        }
+
+        // Only track raw-material stock products in stock tables (bar, kitchen, freezer, soda).
+        String subCategoryCode = null;
+        if (charge.getProduct() != null
+                && charge.getProduct().getSubCategory() != null
+                && charge.getProduct().getSubCategory().getCode() != null) {
+            subCategoryCode = charge.getProduct().getSubCategory().getCode().toLowerCase();
+        }
+        boolean isRawMaterialProduct = "bar".equals(subCategoryCode)
+                || "kitchen".equals(subCategoryCode)
+                || "freezer".equals(subCategoryCode)
+                || "soda".equals(subCategoryCode);
+
+        // If product is not a raw material, ensure no purchase movement exists and exit.
+        if (!isRawMaterialProduct) {
             existingOpt.ifPresent(stockMovementRepository::delete);
             return;
         }
@@ -118,7 +137,13 @@ public class StockMovementService {
      */
     public List<StockInventoryItemResponse> getInventorySummary() {
         Long storeId = getStoreId();
-        List<StockProduct> allProducts = stockProductRepository.findByStoreIdOrderByNameAsc(storeId);
+        List<StockProduct> allProducts = stockProductRepository.findByStoreIdOrderByNameAsc(storeId).stream()
+                .filter(p -> {
+                    if (p.getSubCategory() == null || p.getSubCategory().getCode() == null) return false;
+                    String code = p.getSubCategory().getCode().toLowerCase();
+                    return "bar".equals(code) || "kitchen".equals(code) || "freezer".equals(code) || "soda".equals(code);
+                })
+                .toList();
         List<Object[]> estimatedRows = stockMovementRepository.getEstimatedSummaryByStore(storeId);
         Map<Long, Object[]> estimatedByProductId = estimatedRows.stream()
                 .collect(Collectors.toMap(r -> ((Number) r[0]).longValue(), r -> r));
