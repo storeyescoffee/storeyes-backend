@@ -4,6 +4,7 @@ import io.storeyes.storeyes_coffee.charges.entities.VariableCharge;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import io.storeyes.storeyes_coffee.stock.dto.ManualConsumptionRequest;
 import io.storeyes.storeyes_coffee.stock.dto.SetStockRequest;
+import io.storeyes.storeyes_coffee.stock.dto.SupplementStockItemRequest;
 import io.storeyes.storeyes_coffee.stock.dto.ValidateInventoryItemRequest;
 import io.storeyes.storeyes_coffee.stock.dto.ValidateInventoryRequest;
 import io.storeyes.storeyes_coffee.stock.dto.StockInventoryItemResponse;
@@ -180,16 +181,17 @@ public class StockMovementService {
                     BigDecimal realValue = null;
                     StockInventorySnapshot lastSnapshot = latestSnapshotByProductId.get(product.getId());
                     if (lastSnapshot != null) {
-                        LocalDate snapshotDate = lastSnapshot.getCreatedAt().toLocalDate();
-                        BigDecimal movementsAfterQty = stockMovementRepository.sumQuantityAfterDateForReal(storeId, product.getId(), snapshotDate);
-                        realQuantity = lastSnapshot.getBaseQuantity().add(movementsAfterQty != null ? movementsAfterQty : BigDecimal.ZERO);
+                        // Real stock = exactly what the user last physically counted (the snapshot value).
+                        // Post-snapshot movements (purchases, sales consumption) affect estimated only;
+                        // real stays frozen at the last count until the user saves a new count via the form.
+                        realQuantity = lastSnapshot.getBaseQuantity();
                         if (basePerCounting != null && basePerCounting.compareTo(BigDecimal.ZERO) > 0) {
-                            realQuantityCounting = realQuantity.divide(basePerCounting, 4, RoundingMode.HALF_UP);
+                            realQuantityCounting = lastSnapshot.getCountingQuantity() != null
+                                    ? lastSnapshot.getCountingQuantity()
+                                    : realQuantity.divide(basePerCounting, 4, RoundingMode.HALF_UP);
                         }
-                        // Real value: from stored amounts when snapshot has amount, else realQuantity * averageUnitCost
-                        if (lastSnapshot.getAmount() != null) {
-                            BigDecimal amountAfter = stockMovementRepository.sumAmountAfterDateForReal(storeId, product.getId(), snapshotDate);
-                            realValue = lastSnapshot.getAmount().add(amountAfter != null ? amountAfter : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+                        if (lastSnapshot.getAmount() != null && lastSnapshot.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+                            realValue = lastSnapshot.getAmount().setScale(2, RoundingMode.HALF_UP);
                         } else if (averageUnitCost.compareTo(BigDecimal.ZERO) > 0) {
                             realValue = realQuantity.multiply(averageUnitCost).setScale(2, RoundingMode.HALF_UP);
                         }
@@ -383,6 +385,53 @@ public class StockMovementService {
         stockMovementRepository.save(movement);
     }
 
+    private static final String REFERENCE_TYPE_MANUAL_SUPPLEMENT = "MANUAL_SUPPLEMENT";
+
+    /**
+     * Supplement stock: record goods received outside the normal variable-charge purchase flow.
+     * Creates an ADJUSTMENT movement with a positive delta for each item that has deltaQty > 0.
+     * Effect is immediate on estimated stock; no snapshot is created.
+     */
+    @Transactional
+    public void supplementStock(List<SupplementStockItemRequest> items) {
+        Long storeId = getStoreId();
+        Store store = storeService.getStoreEntityById(storeId);
+
+        for (SupplementStockItemRequest item : items) {
+            StockProduct product = stockProductRepository.findById(item.getProductId())
+                    .orElseThrow(() -> new RuntimeException("Stock product not found: " + item.getProductId()));
+            if (!product.getStore().getId().equals(storeId)) {
+                throw new RuntimeException("Product not in store: " + item.getProductId());
+            }
+
+            BigDecimal deltaBase = item.getDeltaQuantityInBaseUnit();
+            if (deltaBase == null && item.getDeltaCountingQuantity() != null) {
+                if (product.getBasePerCountingUnit() != null && product.getBasePerCountingUnit().compareTo(BigDecimal.ZERO) > 0) {
+                    deltaBase = item.getDeltaCountingQuantity().multiply(product.getBasePerCountingUnit());
+                } else {
+                    deltaBase = item.getDeltaCountingQuantity();
+                }
+            }
+            if (deltaBase == null || deltaBase.compareTo(BigDecimal.ZERO) <= 0) {
+                continue; // skip products with no positive delta
+            }
+
+            BigDecimal amount = item.getAmount() != null ? item.getAmount() : BigDecimal.ZERO;
+            StockMovement movement = StockMovement.builder()
+                    .store(store)
+                    .product(product)
+                    .type(StockMovementType.ADJUSTMENT)
+                    .quantity(deltaBase)
+                    .amount(amount)
+                    .movementDate(LocalDate.now())
+                    .referenceType(REFERENCE_TYPE_MANUAL_SUPPLEMENT)
+                    .referenceId(null)
+                    .notes("Stock supplement: +" + deltaBase + " " + product.getUnit())
+                    .build();
+            stockMovementRepository.save(movement);
+        }
+    }
+
     /**
      * Save physical inventory counts only: create session and snapshots, but do NOT create ADJUSTMENT movements.
      * Use this for the "Fill out the form" / "Save" step – it updates the real quantities/values visible in inventory
@@ -454,8 +503,15 @@ public class StockMovementService {
         Store store = storeService.getStoreEntityById(storeId);
         LocalDateTime now = LocalDateTime.now();
 
-        // Current estimated value per product (before we add new movements) so we can set ADJUSTMENT amount = delta
+        // Current estimated quantity and value per product (before we add new movements).
+        // We use these – not getCurrentQuantity() which sums all movement types – so that the ADJUSTMENT
+        // delta only corrects the estimated stock (PURCHASE + ADJUSTMENT + ARTICLE_SALE), not manual consumptions.
         List<Object[]> estimatedRows = stockMovementRepository.getEstimatedSummaryByStore(storeId);
+        Map<Long, BigDecimal> currentEstimatedQtyByProductId = estimatedRows.stream()
+                .collect(Collectors.toMap(
+                        r -> ((Number) r[0]).longValue(),
+                        r -> r[1] != null ? new BigDecimal(r[1].toString()) : BigDecimal.ZERO
+                ));
         Map<Long, BigDecimal> currentEstimatedValueByProductId = estimatedRows.stream()
                 .collect(Collectors.toMap(
                         r -> ((Number) r[0]).longValue(),
@@ -507,8 +563,10 @@ public class StockMovementService {
                     .build();
             stockInventorySnapshotRepository.save(snapshot);
 
-            BigDecimal currentQty = getCurrentQuantity(storeId, product.getId());
-            BigDecimal deltaQty = targetBase.subtract(currentQty);
+            // Use estimated qty/value (PURCHASE + ADJUSTMENT + ARTICLE_SALE only) as the baseline
+            // so the ADJUSTMENT brings estimated = target without being skewed by manual consumptions.
+            BigDecimal currentEstimatedQty = currentEstimatedQtyByProductId.getOrDefault(product.getId(), BigDecimal.ZERO);
+            BigDecimal deltaQty = targetBase.subtract(currentEstimatedQty);
             BigDecimal currentEstimatedValue = currentEstimatedValueByProductId.getOrDefault(product.getId(), BigDecimal.ZERO);
             // Amount delta so that after adding this ADJUSTMENT: estimated value = target value (same as real)
             BigDecimal amountDelta = targetValue.subtract(currentEstimatedValue).setScale(2, RoundingMode.HALF_UP);

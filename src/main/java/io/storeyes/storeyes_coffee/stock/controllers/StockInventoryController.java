@@ -2,6 +2,7 @@ package io.storeyes.storeyes_coffee.stock.controllers;
 
 import io.storeyes.storeyes_coffee.stock.dto.ManualConsumptionRequest;
 import io.storeyes.storeyes_coffee.stock.dto.SetStockRequest;
+import io.storeyes.storeyes_coffee.stock.dto.SupplementStockItemRequest;
 import io.storeyes.storeyes_coffee.stock.dto.ValidateInventoryRequest;
 import io.storeyes.storeyes_coffee.stock.dto.StockInventoryItemResponse;
 import io.storeyes.storeyes_coffee.stock.dto.StockToBuyItemResponse;
@@ -68,6 +69,23 @@ public class StockInventoryController {
         stockMovementService.setStockQuantity(request);
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Stock quantity set successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.status(HttpStatus.OK).body(response);
+    }
+
+    /**
+     * Supplement stock: record goods received outside the normal purchase flow.
+     * Creates an ADJUSTMENT movement for each item with a positive delta, updating estimated stock immediately.
+     * Products with no delta (or delta = 0) are silently skipped.
+     * POST /api/stock/inventory/supplement
+     * Body: [{ "productId": 7, "deltaCountingQuantity": 2, "amount": 150 }, ...]
+     */
+    @PostMapping("/supplement")
+    public ResponseEntity<Map<String, Object>> supplementStock(
+            @Valid @RequestBody List<SupplementStockItemRequest> items) {
+        stockMovementService.supplementStock(items);
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Stock supplement recorded successfully");
         response.put("timestamp", java.time.OffsetDateTime.now());
         return ResponseEntity.status(HttpStatus.OK).body(response);
     }

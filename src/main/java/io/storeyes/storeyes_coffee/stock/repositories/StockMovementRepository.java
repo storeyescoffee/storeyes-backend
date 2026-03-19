@@ -59,17 +59,23 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     List<Object[]> getEstimatedSummaryByStore(@Param("storeId") Long storeId);
 
     /**
-     * Sum of movement quantities for real stock after a given date.
-     * Real = snapshot + (PURCHASE + ADJUSTMENT + MANUAL_CONSUMPTION only).
-     * Includes same-day movements except INVENTORY_VALIDATION (the snapshot's own adjustment).
-     * Uses movement_date >= afterDate with exclusion of INVENTORY_VALIDATION on the snapshot date
-     * so that same-day MANUAL_ADJUSTMENT (setStock) updates real stock correctly.
+     * Sum of movement quantities for real stock strictly after a given date.
+     * Real = snapshot + (PURCHASE + ADJUSTMENT + MANUAL_CONSUMPTION only, days D+1 onwards).
+     *
+     * Using strict > is intentional: the snapshot represents an absolute physical count at the
+     * moment it was saved. Everything that happened on that same calendar day (including purchases
+     * registered that day) is already "baked into" the count – the user physically counted the
+     * shelf and entered the number they saw. Only movements on subsequent days should be added on
+     * top, so the real stock naturally drifts after a count (from new purchases, waste, etc.) and
+     * the owner can see a growing difference until they do the next validation.
+     *
+     * Using >= (as before) caused purchases registered on the snapshot day to be stacked on top
+     * of the snapshot value, inflating real stock and making accept-validation loop endlessly.
      */
     @Query("""
         SELECT COALESCE(SUM(m.quantity), 0) FROM StockMovement m
         WHERE m.store.id = :storeId AND m.product.id = :productId
-        AND ((m.movementDate > :afterDate)
-             OR (m.movementDate = :afterDate AND (m.referenceType IS NULL OR m.referenceType <> 'INVENTORY_VALIDATION')))
+        AND m.movementDate > :afterDate
         AND (m.type IN ('PURCHASE', 'ADJUSTMENT')
              OR (m.type = 'CONSUMPTION' AND m.referenceType = 'MANUAL_CONSUMPTION'))
         """)
@@ -79,10 +85,9 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
             @Param("afterDate") java.time.LocalDate afterDate);
 
     /**
-     * Sum of movement amounts for real stock after a given date.
+     * Sum of movement amounts for real stock strictly after a given date.
      * PURCHASE and ADJUSTMENT add amount; MANUAL_CONSUMPTION subtracts.
-     * Includes same-day movements except INVENTORY_VALIDATION so setStock (MANUAL_ADJUSTMENT)
-     * updates real value on the same day as a snapshot.
+     * See sumQuantityAfterDateForReal for rationale on using strict >.
      */
     @Query(value = """
         SELECT COALESCE(SUM(
@@ -91,8 +96,7 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
                ELSE 0 END
         ), 0) FROM stock_movements sm
         WHERE sm.store_id = :storeId AND sm.product_id = :productId
-        AND ((sm.movement_date > :afterDate)
-             OR (sm.movement_date = :afterDate AND (sm.reference_type IS NULL OR sm.reference_type <> 'INVENTORY_VALIDATION')))
+        AND sm.movement_date > :afterDate
         AND (sm.type IN ('PURCHASE', 'ADJUSTMENT')
              OR (sm.type = 'CONSUMPTION' AND sm.reference_type = 'MANUAL_CONSUMPTION'))
         """, nativeQuery = true)
