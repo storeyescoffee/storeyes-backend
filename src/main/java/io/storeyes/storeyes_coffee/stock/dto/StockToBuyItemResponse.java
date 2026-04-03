@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Product that needs restocking: current (real) quantity &lt;= minimal threshold.
@@ -33,4 +34,7 @@ public class StockToBuyItemResponse {
     private BigDecimal minimalThreshold;
     /** Threshold in human unit for display when applicable. */
     private BigDecimal minimalThresholdCounting;
+
+    /** Suppliers linked to this product (for ordering / filtering on mobile). */
+    private List<StockProductSupplierBrief> suppliers;
 }

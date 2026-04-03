@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Product with estimated (system) and real (validated count) stock.
@@ -49,5 +50,8 @@ public class StockInventoryItemResponse {
     private BigDecimal averageUnitCost;
     /** Unit price from stock product (per base unit). Used for amount = quantity × unitPrice. */
     private BigDecimal unitPrice;
+
+    /** Suppliers linked to this stock product in the store (same as backoffice). */
+    private List<StockProductSupplierBrief> suppliers;
 
 }

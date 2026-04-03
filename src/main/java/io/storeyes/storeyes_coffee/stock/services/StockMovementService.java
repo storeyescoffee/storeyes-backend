@@ -8,16 +8,19 @@ import io.storeyes.storeyes_coffee.stock.dto.SupplementStockItemRequest;
 import io.storeyes.storeyes_coffee.stock.dto.ValidateInventoryItemRequest;
 import io.storeyes.storeyes_coffee.stock.dto.ValidateInventoryRequest;
 import io.storeyes.storeyes_coffee.stock.dto.StockInventoryItemResponse;
+import io.storeyes.storeyes_coffee.stock.dto.StockProductSupplierBrief;
 import io.storeyes.storeyes_coffee.stock.dto.StockToBuyItemResponse;
 import io.storeyes.storeyes_coffee.stock.entities.StockMovement;
 import io.storeyes.storeyes_coffee.stock.entities.StockMovementType;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
+import io.storeyes.storeyes_coffee.stock.entities.SupplierStockProduct;
 import io.storeyes.storeyes_coffee.stock.entities.StockInventorySession;
 import io.storeyes.storeyes_coffee.stock.entities.StockInventorySnapshot;
 import io.storeyes.storeyes_coffee.stock.repositories.StockInventorySessionRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockInventorySnapshotRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockMovementRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
+import io.storeyes.storeyes_coffee.stock.repositories.SupplierStockProductRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
@@ -28,6 +31,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +50,7 @@ public class StockMovementService {
     private final StockProductRepository stockProductRepository;
     private final StockInventorySessionRepository stockInventorySessionRepository;
     private final StockInventorySnapshotRepository stockInventorySnapshotRepository;
+    private final SupplierStockProductRepository supplierStockProductRepository;
     private final StoreService storeService;
 
     private Long getStoreId() {
@@ -52,6 +59,25 @@ public class StockMovementService {
             throw new RuntimeException("User is not authenticated");
         }
         return storeService.getStoreByOwnerId(userId).getId();
+    }
+
+    private Map<Long, List<StockProductSupplierBrief>> loadSuppliersByProductId(Collection<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        List<SupplierStockProduct> links =
+                supplierStockProductRepository.findByStockProduct_IdInWithSupplier(productIds);
+        Map<Long, List<StockProductSupplierBrief>> map = new HashMap<>();
+        for (SupplierStockProduct l : links) {
+            Long pid = l.getStockProduct().getId();
+            map.computeIfAbsent(pid, k -> new ArrayList<>())
+                    .add(StockProductSupplierBrief.builder()
+                            .id(l.getSupplier().getId())
+                            .name(l.getSupplier().getName())
+                            .isPreferred(l.getIsPreferred())
+                            .build());
+        }
+        return map;
     }
 
     /**
@@ -179,6 +205,9 @@ public class StockMovementService {
             latestSnapshotByProductId.putIfAbsent(s.getProduct().getId(), s);
         }
 
+        Map<Long, List<StockProductSupplierBrief>> suppliersByProductId =
+                loadSuppliersByProductId(allProducts.stream().map(StockProduct::getId).toList());
+
         return allProducts.stream()
                 .map(product -> {
                     Object[] r = estimatedByProductId.get(product.getId());
@@ -259,6 +288,7 @@ public class StockMovementService {
                             .totalPurchaseAmount(BigDecimal.ZERO)
                             .averageUnitCost(averageUnitCost)
                             .unitPrice(product.getUnitPrice() != null ? product.getUnitPrice() : BigDecimal.ZERO)
+                            .suppliers(suppliersByProductId.getOrDefault(product.getId(), List.of()))
                             .build();
                 })
                 .toList();
@@ -303,6 +333,7 @@ public class StockMovementService {
                             .currentQuantityCounting(currentCounting)
                             .minimalThreshold(item.getMinimalThreshold())
                             .minimalThresholdCounting(thresholdCounting)
+                            .suppliers(item.getSuppliers() != null ? item.getSuppliers() : List.of())
                             .build();
                 })
                 .sorted((a, b) -> {
