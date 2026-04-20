@@ -11,6 +11,7 @@ import io.storeyes.storeyes_coffee.kpi.entities.FactKpiServerDaily;
 import io.storeyes.storeyes_coffee.kpi.repositories.*;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -31,66 +32,78 @@ public class KpiService {
     private final DateDimensionRepository dateDimensionRepository;
     private final DailyRevenuePaymentBreakdownRepository dailyRevenuePaymentBreakdownRepository;
     private final StoreRepository storeRepository;
-    
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
+
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    private static double scaledRevenue(Double value, double mult) {
+        if (value == null) {
+            return 0.0;
+        }
+        return value * mult;
+    }
+
+    private static int scaledQuantity(Integer quantity, double mult) {
+        if (quantity == null) {
+            return 0;
+        }
+        return (int) Math.round(quantity * mult);
+    }
     
     /**
      * Generate daily report for a store on a specific date
      */
     public DailyReportDTO getDailyReport(Long storeId, LocalDate date) {
-        // Get store
+        DemoStoreDataSourceResolver.KpiDataContext kpiCtx = demoStoreDataSourceResolver.resolveKpiContext(storeId);
+        Long dataStoreId = kpiCtx.dataStoreId();
+        double mult = kpiCtx.revenueQuantityMultiplier();
+
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new RuntimeException("Store not found with id: " + storeId));
-        
-        // Get date dimension
+
         DateDimension dateDimension = dateDimensionRepository.findByDate(date)
                 .orElseThrow(() -> new RuntimeException("Date dimension not found for date: " + date));
-        
-        // Get daily KPI
-        FactKpiDaily dailyKpi = factKpiDailyRepository.findByStoreIdAndDate(storeId, dateDimension)
-                .orElseThrow(() -> new RuntimeException("Daily KPI not found for store: " + storeId + " and date: " + date));
-        
-        // Get hourly data
-        List<FactKpiHourly> hourlyKpis = factKpiHourlyRepository.findByStoreIdAndDateOrderByHourAsc(storeId, dateDimension);
-        
-        // Get product data
-        List<FactKpiProductDaily> productKpis = factKpiProductDailyRepository.findByStoreIdAndDate(storeId, dateDimension);
-        
-        // Get category data
-        List<FactKpiCategoryDaily> categoryKpis = factKpiCategoryDailyRepository.findByStoreIdAndDate(storeId, dateDimension);
-        
-        // Get server data
-        List<FactKpiServerDaily> serverKpis = factKpiServerDailyRepository.findByStoreIdAndDateOrderByRevenueDesc(storeId, dateDimension);
-        
-        // Build revenue DTO (include TPE and Espèce from breakdown if present)
-        Double totalTTC = dailyKpi.getTotalRevenueTtc();
+
+        FactKpiDaily dailyKpi = factKpiDailyRepository.findByStoreIdAndDate(dataStoreId, dateDimension)
+                .orElseThrow(() -> new RuntimeException("Daily KPI not found for store: " + dataStoreId + " and date: " + date));
+
+        List<FactKpiHourly> hourlyKpis = factKpiHourlyRepository.findByStoreIdAndDateOrderByHourAsc(dataStoreId, dateDimension);
+
+        List<FactKpiProductDaily> productKpis = factKpiProductDailyRepository.findByStoreIdAndDate(dataStoreId, dateDimension);
+
+        List<FactKpiCategoryDaily> categoryKpis = factKpiCategoryDailyRepository.findByStoreIdAndDate(dataStoreId, dateDimension);
+
+        List<FactKpiServerDaily> serverKpis = factKpiServerDailyRepository.findByStoreIdAndDateOrderByRevenueDesc(dataStoreId, dateDimension);
+
+        double totalTTC = scaledRevenue(dailyKpi.getTotalRevenueTtc(), mult);
         Double tpe = null;
         Double espece = null;
-        var breakdownOpt = dailyRevenuePaymentBreakdownRepository.findByStoreIdAndDate(storeId, dateDimension);
+        var breakdownOpt = dailyRevenuePaymentBreakdownRepository.findByStoreIdAndDate(dataStoreId, dateDimension);
         if (breakdownOpt.isPresent()) {
-            tpe = breakdownOpt.get().getTpe();
+            tpe = scaledRevenue(breakdownOpt.get().getTpe(), mult);
             espece = Math.max(0, totalTTC - (tpe != null ? tpe : 0));
         }
+        int transactions = dailyKpi.getTransactions() != null ? dailyKpi.getTransactions() : 0;
+        double avgTransactionValue = transactions > 0 ? totalTTC / transactions : scaledRevenue(dailyKpi.getAverageTransactionValue(), mult);
         RevenueDTO revenue = RevenueDTO.builder()
                 .totalTTC(totalTTC)
-                .totalHT(dailyKpi.getTotalRevenueHt())
-                .transactions(dailyKpi.getTransactions())
-                .avgTransactionValue(dailyKpi.getAverageTransactionValue())
-                .revenuePerTransaction(dailyKpi.getAverageTransactionValue())
+                .totalHT(scaledRevenue(dailyKpi.getTotalRevenueHt(), mult))
+                .transactions(transactions)
+                .avgTransactionValue(avgTransactionValue)
+                .revenuePerTransaction(avgTransactionValue)
                 .tpe(tpe)
                 .espece(espece)
                 .build();
-        
-        // Build hourly data DTOs for all 24 hours (00:00 - 23:00)
+
         Map<Integer, FactKpiHourly> hourlyMap = hourlyKpis.stream()
                 .collect(Collectors.toMap(FactKpiHourly::getHour, h -> h));
 
         List<HourlyDataDTO> hourlyData = new ArrayList<>();
         for (int hour = 0; hour < 24; hour++) {
             FactKpiHourly h = hourlyMap.get(hour);
-            Double revenueHour = (h != null && h.getRevenue() != null) ? h.getRevenue() : 0.0;
+            double revenueHour = (h != null && h.getRevenue() != null) ? scaledRevenue(h.getRevenue(), mult) : 0.0;
             Integer transactionsHour = (h != null && h.getTransactions() != null) ? h.getTransactions() : 0;
-            Integer itemsSoldHour = (h != null && h.getQuantity() != null) ? h.getQuantity() : 0;
+            int itemsSoldHour = (h != null && h.getQuantity() != null) ? scaledQuantity(h.getQuantity(), mult) : 0;
 
             hourlyData.add(HourlyDataDTO.builder()
                     .hour(formatHour(hour))
@@ -99,8 +112,7 @@ public class KpiService {
                     .itemsSold(itemsSoldHour)
                     .build());
         }
-        
-        // Build top products by quantity
+
         List<TopProductDTO> topProductsByQuantity = new ArrayList<>();
         productKpis.stream()
                 .sorted((a, b) -> b.getQuantity().compareTo(a.getQuantity()))
@@ -110,11 +122,10 @@ public class KpiService {
                     topProductsByQuantity.add(TopProductDTO.builder()
                             .rank(rank)
                             .name(p.getProductName())
-                            .quantity(p.getQuantity())
+                            .quantity(scaledQuantity(p.getQuantity(), mult))
                             .build());
                 });
-        
-        // Build top products by revenue
+
         List<TopProductDTO> topProductsByRevenue = new ArrayList<>();
         productKpis.stream()
                 .sorted((a, b) -> b.getRevenue().compareTo(a.getRevenue()))
@@ -124,39 +135,42 @@ public class KpiService {
                     topProductsByRevenue.add(TopProductDTO.builder()
                             .rank(rank)
                             .name(p.getProductName())
-                            .revenue(p.getRevenue())
+                            .revenue(scaledRevenue(p.getRevenue(), mult))
                             .build());
                 });
-        
-        // Build category analysis
-        Double totalRevenue = dailyKpi.getTotalRevenueTtc();
+
+        double totalRevenue = scaledRevenue(dailyKpi.getTotalRevenueTtc(), mult);
         List<CategoryAnalysisDTO> categoryAnalysis = categoryKpis.stream()
-                .map(c -> CategoryAnalysisDTO.builder()
-                        .category(c.getCategory())
-                        .revenue(c.getRevenue())
-                        .quantity(c.getQuantity())
-                        .transactions(c.getTransactions())
-                        .percentageOfRevenue(totalRevenue > 0 ? (c.getRevenue() / totalRevenue) * 100 : 0.0)
-                        .build())
-                .sorted((a, b) -> b.getRevenue().compareTo(a.getRevenue()))
+                .map(c -> {
+                    double catRev = scaledRevenue(c.getRevenue(), mult);
+                    return CategoryAnalysisDTO.builder()
+                            .category(c.getCategory())
+                            .revenue(catRev)
+                            .quantity(scaledQuantity(c.getQuantity(), mult))
+                            .transactions(c.getTransactions())
+                            .percentageOfRevenue(totalRevenue > 0 ? (catRev / totalRevenue) * 100 : 0.0)
+                            .build();
+                })
+                .sorted((a, b) -> Double.compare(b.getRevenue(), a.getRevenue()))
                 .collect(Collectors.toList());
-        
-        // Build staff performance
+
         List<StaffPerformanceDTO> staffPerformance = serverKpis.stream()
-                .map(s -> StaffPerformanceDTO.builder()
-                        .name(s.getServer())
-                        .revenue(s.getRevenue())
-                        .transactions(s.getTransactions())
-                        .avgValue(s.getTransactions() > 0 ? s.getRevenue() / s.getTransactions() : 0.0)
-                        .share(totalRevenue > 0 ? (s.getRevenue() / totalRevenue) * 100 : 0.0)
-                        .build())
+                .map(s -> {
+                    double rev = scaledRevenue(s.getRevenue(), mult);
+                    int tx = s.getTransactions() != null ? s.getTransactions() : 0;
+                    return StaffPerformanceDTO.builder()
+                            .name(s.getServer())
+                            .revenue(rev)
+                            .transactions(tx)
+                            .avgValue(tx > 0 ? rev / tx : 0.0)
+                            .share(totalRevenue > 0 ? (rev / totalRevenue) * 100 : 0.0)
+                            .build();
+                })
                 .collect(Collectors.toList());
-        
-        // Build peak periods
-        List<PeakPeriodDTO> peakPeriods = calculatePeakPeriods(hourlyKpis, totalRevenue);
-        
-        // Build insights
-        InsightsDTO insights = calculateInsights(hourlyKpis, productKpis, peakPeriods, storeId, date);
+
+        List<PeakPeriodDTO> peakPeriods = calculatePeakPeriods(hourlyKpis, totalRevenue, mult);
+
+        InsightsDTO insights = calculateInsights(hourlyKpis, productKpis, peakPeriods, dataStoreId, date, mult);
         
         // Build and return daily report
         return DailyReportDTO.builder()
@@ -183,18 +197,20 @@ public class KpiService {
         if (tpe == null || tpe < 0) {
             throw new RuntimeException("TPE must be >= 0");
         }
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new RuntimeException("Store not found with id: " + storeId));
+        DemoStoreDataSourceResolver.KpiDataContext kpiCtx = demoStoreDataSourceResolver.resolveKpiContext(storeId);
+        Long dataStoreId = kpiCtx.dataStoreId();
+        Store store = storeRepository.findById(dataStoreId)
+                .orElseThrow(() -> new RuntimeException("Store not found with id: " + dataStoreId));
         DateDimension dateDimension = dateDimensionRepository.findByDate(date)
                 .orElseThrow(() -> new RuntimeException("Date dimension not found for date: " + date));
-        FactKpiDaily dailyKpi = factKpiDailyRepository.findByStoreIdAndDate(storeId, dateDimension)
-                .orElseThrow(() -> new RuntimeException("Daily KPI not found for store: " + storeId + " and date: " + date));
+        FactKpiDaily dailyKpi = factKpiDailyRepository.findByStoreIdAndDate(dataStoreId, dateDimension)
+                .orElseThrow(() -> new RuntimeException("Daily KPI not found for store: " + dataStoreId + " and date: " + date));
         Double totalTTC = dailyKpi.getTotalRevenueTtc();
         if (tpe > totalTTC) {
             throw new RuntimeException("TPE cannot exceed total revenue (TTC): " + totalTTC);
         }
         DailyRevenuePaymentBreakdown breakdown = dailyRevenuePaymentBreakdownRepository
-                .findByStoreIdAndDate(storeId, dateDimension)
+                .findByStoreIdAndDate(dataStoreId, dateDimension)
                 .orElse(DailyRevenuePaymentBreakdown.builder()
                         .store(store)
                         .date(dateDimension)
@@ -214,7 +230,7 @@ public class KpiService {
     /**
      * Calculate peak periods from hourly data
      */
-    private List<PeakPeriodDTO> calculatePeakPeriods(List<FactKpiHourly> hourlyKpis, Double totalRevenue) {
+    private List<PeakPeriodDTO> calculatePeakPeriods(List<FactKpiHourly> hourlyKpis, double totalRevenue, double mult) {
         // Define time ranges
         List<PeriodRange> periodRanges = Arrays.asList(
                 new PeriodRange("Early Morning", "05:00-07:00", 5, 7),
@@ -241,14 +257,14 @@ public class KpiService {
             for (int hour = range.startHour; hour < range.endHour; hour++) {
                 FactKpiHourly hourly = hourlyMap.get(hour);
                 if (hourly != null) {
-                    periodRevenue += hourly.getRevenue();
-                    periodTransactions += hourly.getTransactions();
-                    periodItemsSold += hourly.getQuantity();
+                    periodRevenue += scaledRevenue(hourly.getRevenue(), mult);
+                    periodTransactions += hourly.getTransactions() != null ? hourly.getTransactions() : 0;
+                    periodItemsSold += scaledQuantity(hourly.getQuantity(), mult);
                 }
             }
             
             if (periodRevenue > 0) {
-                double share = totalRevenue > 0 ? (periodRevenue / totalRevenue) * 100 : 0.0;
+                double share = totalRevenue > 0 ? (periodRevenue / totalRevenue) * 100.0 : 0.0;
                 String status = determinePeriodStatus(share);
                 
                 peakPeriods.add(PeakPeriodDTO.builder()
@@ -285,54 +301,58 @@ public class KpiService {
     /**
      * Calculate insights
      */
-    private InsightsDTO calculateInsights(List<FactKpiHourly> hourlyKpis, 
+    private InsightsDTO calculateInsights(List<FactKpiHourly> hourlyKpis,
                                          List<FactKpiProductDaily> productKpis,
                                          List<PeakPeriodDTO> peakPeriods,
-                                         Long storeId, 
-                                         LocalDate date) {
+                                         Long dataStoreId,
+                                         LocalDate date,
+                                         double mult) {
         // Peak hour
         FactKpiHourly peakHour = hourlyKpis.stream()
                 .max(Comparator.comparing(FactKpiHourly::getRevenue))
                 .orElse(null);
-        
+
         InsightsDTO.PeakHourDTO peakHourDTO = null;
         if (peakHour != null) {
             peakHourDTO = InsightsDTO.PeakHourDTO.builder()
                     .time(formatHour(peakHour.getHour()))
-                    .revenue(peakHour.getRevenue())
+                    .revenue(scaledRevenue(peakHour.getRevenue(), mult))
                     .build();
         }
-        
+
         // Best selling product
         FactKpiProductDaily bestProduct = productKpis.stream()
                 .max(Comparator.comparing(FactKpiProductDaily::getQuantity))
                 .orElse(null);
-        
+
         InsightsDTO.BestSellingProductDTO bestSellingProductDTO = null;
         if (bestProduct != null) {
             bestSellingProductDTO = InsightsDTO.BestSellingProductDTO.builder()
                     .name(bestProduct.getProductName())
-                    .quantity(bestProduct.getQuantity())
+                    .quantity(scaledQuantity(bestProduct.getQuantity(), mult))
                     .build();
         }
-        
+
         // Highest value transaction - approximate using avg * 2
         FactKpiDaily dailyKpi = factKpiDailyRepository.findByStoreIdAndDate(
-                storeId, 
+                dataStoreId,
                 dateDimensionRepository.findByDate(date).orElse(null)
         ).orElse(null);
-        
+
         Double highestValueTransaction = null;
         if (dailyKpi != null) {
-            // Approximate: use average * 2 as highest transaction
-            highestValueTransaction = dailyKpi.getAverageTransactionValue() * 2;
+            int tx = dailyKpi.getTransactions() != null ? dailyKpi.getTransactions() : 0;
+            double scaledAvg = tx > 0
+                    ? scaledRevenue(dailyKpi.getTotalRevenueTtc(), mult) / tx
+                    : scaledRevenue(dailyKpi.getAverageTransactionValue(), mult);
+            highestValueTransaction = scaledAvg * 2;
         }
-        
+
         // Busiest period
         PeakPeriodDTO busiestPeriod = peakPeriods.stream()
                 .max(Comparator.comparing(PeakPeriodDTO::getTransactions))
                 .orElse(null);
-        
+
         InsightsDTO.BusiestPeriodDTO busiestPeriodDTO = null;
         if (busiestPeriod != null) {
             busiestPeriodDTO = InsightsDTO.BusiestPeriodDTO.builder()
@@ -340,9 +360,9 @@ public class KpiService {
                     .transactions(busiestPeriod.getTransactions())
                     .build();
         }
-        
+
         // Revenue comparison
-        InsightsDTO.RevenueComparisonDTO revenueComparison = calculateRevenueComparison(storeId, date);
+        InsightsDTO.RevenueComparisonDTO revenueComparison = calculateRevenueComparison(dataStoreId, date);
         
         return InsightsDTO.builder()
                 .peakHour(peakHourDTO)
@@ -356,7 +376,7 @@ public class KpiService {
     /**
      * Calculate revenue comparison with previous day and week
      */
-    private InsightsDTO.RevenueComparisonDTO calculateRevenueComparison(Long storeId, LocalDate date) {
+    private InsightsDTO.RevenueComparisonDTO calculateRevenueComparison(Long dataStoreId, LocalDate date) {
         DateDimension currentDate = dateDimensionRepository.findByDate(date).orElse(null);
         if (currentDate == null) {
             return InsightsDTO.RevenueComparisonDTO.builder()
@@ -364,34 +384,32 @@ public class KpiService {
                     .vsPreviousWeek(0.0)
                     .build();
         }
-        
-        FactKpiDaily currentDaily = factKpiDailyRepository.findByStoreIdAndDate(storeId, currentDate).orElse(null);
+
+        FactKpiDaily currentDaily = factKpiDailyRepository.findByStoreIdAndDate(dataStoreId, currentDate).orElse(null);
         if (currentDaily == null) {
             return InsightsDTO.RevenueComparisonDTO.builder()
                     .vsPreviousDay(0.0)
                     .vsPreviousWeek(0.0)
                     .build();
         }
-        
+
         Double currentRevenue = currentDaily.getTotalRevenueTtc();
-        
-        // Previous day
+
         LocalDate previousDay = date.minusDays(1);
         DateDimension previousDayDim = dateDimensionRepository.findByDate(previousDay).orElse(null);
         Double previousDayRevenue = null;
         if (previousDayDim != null) {
-            FactKpiDaily previousDaily = factKpiDailyRepository.findByStoreIdAndDate(storeId, previousDayDim).orElse(null);
+            FactKpiDaily previousDaily = factKpiDailyRepository.findByStoreIdAndDate(dataStoreId, previousDayDim).orElse(null);
             if (previousDaily != null) {
                 previousDayRevenue = previousDaily.getTotalRevenueTtc();
             }
         }
-        
-        // Previous week (same day, previous week)
+
         LocalDate previousWeek = date.minusWeeks(1);
         DateDimension previousWeekDim = dateDimensionRepository.findByDate(previousWeek).orElse(null);
         Double previousWeekRevenue = null;
         if (previousWeekDim != null) {
-            FactKpiDaily previousWeekDaily = factKpiDailyRepository.findByStoreIdAndDate(storeId, previousWeekDim).orElse(null);
+            FactKpiDaily previousWeekDaily = factKpiDailyRepository.findByStoreIdAndDate(dataStoreId, previousWeekDim).orElse(null);
             if (previousWeekDaily != null) {
                 previousWeekRevenue = previousWeekDaily.getTotalRevenueTtc();
             }

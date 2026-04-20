@@ -10,6 +10,7 @@ import io.storeyes.storeyes_coffee.alerts.mappers.AlertMapper;
 import io.storeyes.storeyes_coffee.alerts.repositories.AlertRepository;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class AlertService {
     private final AlertRepository alertRepository;
     private final AlertMapper alertMapper;
     private final StoreRepository storeRepository;
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
     
     /**
      * Create a new alert
@@ -72,6 +74,7 @@ public class AlertService {
         if (storeId == null) {
             throw new RuntimeException("Store context not found for current user");
         }
+        Long dataStoreId = demoStoreDataSourceResolver.resolveAlertsDataStoreId(storeId);
         boolean filterUnprocessed = Boolean.TRUE.equals(unprocessed);
         boolean filterReturnType = Boolean.TRUE.equals(returnType);
         // alertType param takes precedence; if not set, fall back to returnType for backward compat
@@ -89,16 +92,16 @@ public class AlertService {
         if (endDate != null) {
             // Date range
             if (filterUnprocessed) {
-                alerts = alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
+                alerts = alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(date, endDate, dataStoreId);
             } else {
-                alerts = alertRepository.findProcessedByAlertDateBetweenAndStoreId(date, endDate, storeId);
+                alerts = alertRepository.findProcessedByAlertDateBetweenAndStoreId(date, endDate, dataStoreId);
             }
         } else {
             // Exact date (or defaulted to today)
             if (filterUnprocessed) {
-                alerts = alertRepository.findUnprocessedByAlertDateAndStoreId(date, storeId);
+                alerts = alertRepository.findUnprocessedByAlertDateAndStoreId(date, dataStoreId);
             } else {
-                alerts = alertRepository.findProcessedByAlertDateAndStoreId(date, storeId);
+                alerts = alertRepository.findProcessedByAlertDateAndStoreId(date, dataStoreId);
             }
         }
         
@@ -159,9 +162,10 @@ public class AlertService {
     public List<AlertSummaryDTO> getTodayAlertsByStoreId(Long storeId) {
         // Get today's date
         LocalDateTime today = LocalDate.now().atStartOfDay();
-        
+        Long dataStoreId = demoStoreDataSourceResolver.resolveAlertsDataStoreId(storeId);
+
         // Find alerts for today and store
-        List<Alert> alerts = alertRepository.findByTodayAndStoreId(today, storeId);
+        List<Alert> alerts = alertRepository.findByTodayAndStoreId(today, dataStoreId);
         
         // Map to summary DTO
         return alerts.stream()
@@ -177,8 +181,9 @@ public class AlertService {
      * Returns all alerts (regardless of processed status) for the specified date and store
      */
     public List<AlertSummaryDTO> getAlertSummariesByDateAndStoreId(LocalDate date, Long storeId) {
+        Long dataStoreId = demoStoreDataSourceResolver.resolveAlertsDataStoreId(storeId);
         // Find alerts by date and store
-        List<Alert> alerts = alertRepository.findByAlertDateAndStoreId(date, storeId);
+        List<Alert> alerts = alertRepository.findByAlertDateAndStoreId(date, dataStoreId);
         
         // Map to summary DTO
         return alerts.stream()

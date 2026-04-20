@@ -8,6 +8,7 @@ import io.storeyes.storeyes_coffee.stock.repositories.ArticleRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockMovementRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class StockSalesSyncService {
     private final StockConsumptionService stockConsumptionService;
     private final StoreService storeService;
     private final StoreRepository storeRepository;
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreIdFromContext() {
         String userId = KeycloakTokenUtils.getUserId();
@@ -60,9 +62,10 @@ public class StockSalesSyncService {
      */
     @Transactional
     public int applySalesForDateForStore(Long storeId, LocalDate date) {
-        List<SalesProduct> sales = salesProductRepository.findByStoreIdAndDate(storeId, date);
+        Long dataStoreId = demoStoreDataSourceResolver.resolveStockDataStoreId(storeId);
+        List<SalesProduct> sales = salesProductRepository.findByStoreIdAndDate(dataStoreId, date);
         if (sales.isEmpty()) {
-            log.info("No SalesProduct rows for store {} and date {}", storeId, date);
+            log.info("No SalesProduct rows for store {} (data store {}) and date {}", storeId, dataStoreId, date);
             return 0;
         }
 
@@ -82,9 +85,9 @@ public class StockSalesSyncService {
             }
 
             Optional<Article> articleOpt =
-                    articleRepository.findFirstByStoreIdAndNameIgnoreCase(storeId, productName.trim());
+                    articleRepository.findFirstByStoreIdAndNameIgnoreCase(dataStoreId, productName.trim());
             if (articleOpt.isEmpty()) {
-                log.warn("No Article found for SalesProduct id={} name='{}' storeId={}", sp.getId(), productName, storeId);
+                log.warn("No Article found for SalesProduct id={} name='{}' dataStoreId={}", sp.getId(), productName, dataStoreId);
                 continue;
             }
             Article article = articleOpt.get();
@@ -96,7 +99,7 @@ public class StockSalesSyncService {
             BigDecimal quantitySold = BigDecimal.valueOf(qtyInt);
 
             stockConsumptionService.createConsumptionForArticleSale(
-                    storeId,
+                    dataStoreId,
                     article.getId(),
                     quantitySold,
                     sp.getDate() != null ? sp.getDate() : date,
@@ -105,7 +108,8 @@ public class StockSalesSyncService {
             processed++;
         }
 
-        log.info("Applied sales for store {} and date {}: {} SalesProduct rows processed", storeId, date, processed);
+        log.info("Applied sales for store {} (data store {}) and date {}: {} SalesProduct rows processed",
+                storeId, dataStoreId, date, processed);
         return processed;
     }
 

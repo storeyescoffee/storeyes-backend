@@ -8,6 +8,7 @@ import io.storeyes.storeyes_coffee.stock.entities.Article;
 import io.storeyes.storeyes_coffee.stock.repositories.ArticleRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class ArticleService {
     private final ArticleRepository articleRepository;
     private final StoreRepository storeRepository;
     private final StoreService storeService;
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreId() {
         String userId = KeycloakTokenUtils.getUserId();
@@ -34,8 +36,9 @@ public class ArticleService {
 
     public List<ArticleResponse> getArticles(String category, String search) {
         Long storeId = getStoreId();
+        Long dataStoreId = demoStoreDataSourceResolver.resolveStockDataStoreId(storeId);
         List<Article> articles = articleRepository.findByStoreIdAndFilters(
-                storeId,
+                dataStoreId,
                 (category != null && !category.isBlank()) ? category.trim() : null,
                 (search != null && !search.isBlank()) ? search.trim() : null
         );
@@ -44,7 +47,8 @@ public class ArticleService {
 
     public ArticleResponse getArticleById(Long id) {
         Long storeId = getStoreId();
-        Article article = articleRepository.findByIdAndStoreId(id, storeId)
+        Long dataStoreId = demoStoreDataSourceResolver.resolveStockDataStoreId(storeId);
+        Article article = articleRepository.findByIdAndStoreId(id, dataStoreId)
                 .orElseThrow(() -> new RuntimeException("Article not found with id: " + id));
         return toResponse(article);
     }

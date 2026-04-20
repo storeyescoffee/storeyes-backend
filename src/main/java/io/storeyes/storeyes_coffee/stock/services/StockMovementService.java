@@ -22,6 +22,7 @@ import io.storeyes.storeyes_coffee.stock.repositories.StockMovementRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.SupplierStockProductRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,7 @@ public class StockMovementService {
     private final StockInventorySnapshotRepository stockInventorySnapshotRepository;
     private final SupplierStockProductRepository supplierStockProductRepository;
     private final StoreService storeService;
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreId() {
         String userId = KeycloakTokenUtils.getUserId();
@@ -59,6 +61,11 @@ public class StockMovementService {
             throw new RuntimeException("User is not authenticated");
         }
         return storeService.getStoreByOwnerId(userId).getId();
+    }
+
+    /** Stock rows and movements for the context store, or the mapped source when the store is a demo. */
+    private Long getStockDataStoreId() {
+        return demoStoreDataSourceResolver.resolveStockDataStoreId(getStoreId());
     }
 
     private Map<Long, List<StockProductSupplierBrief>> loadSuppliersByProductId(Collection<Long> productIds) {
@@ -192,7 +199,7 @@ public class StockMovementService {
      * Real value = realQuantity * averageUnitCost when realQuantity exists.
      */
     public List<StockInventoryItemResponse> getInventorySummary() {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         List<StockProduct> allProducts = stockProductRepository.findByStoreIdOrderByNameAsc(storeId).stream()
                 .filter(p -> {
                     if (p.getSubCategory() == null || p.getSubCategory().getCode() == null) return false;
@@ -368,7 +375,7 @@ public class StockMovementService {
     @Transactional
     public void setStockQuantity(SetStockRequest request) {
         Long productId = request.getProductId();
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         StockProduct product = stockProductRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Stock product not found with id: " + productId));
         if (!product.getStore().getId().equals(storeId)) {
@@ -416,7 +423,7 @@ public class StockMovementService {
     @Transactional
     public void createManualConsumption(ManualConsumptionRequest request) {
         Long productId = request.getProductId();
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         StockProduct product = stockProductRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Stock product not found with id: " + productId));
         if (!product.getStore().getId().equals(storeId)) {
@@ -468,7 +475,7 @@ public class StockMovementService {
      */
     @Transactional
     public void supplementStock(List<SupplementStockItemRequest> items) {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         Store store = storeService.getStoreEntityById(storeId);
 
         for (SupplementStockItemRequest item : items) {
@@ -524,7 +531,7 @@ public class StockMovementService {
      */
     @Transactional
     public void saveInventoryCounts(ValidateInventoryRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         Store store = storeService.getStoreEntityById(storeId);
         LocalDateTime now = LocalDateTime.now();
 
@@ -592,7 +599,7 @@ public class StockMovementService {
      */
     @Transactional
     public void validateInventory(ValidateInventoryRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         Store store = storeService.getStoreEntityById(storeId);
         LocalDateTime now = LocalDateTime.now();
 

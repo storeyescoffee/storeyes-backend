@@ -19,6 +19,7 @@ import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,7 @@ public class ChargeService {
     private final EmployeeRepository employeeRepository;
     private final EntityManager entityManager;
     private final UserPreferenceRepository userPreferenceRepository;
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private static final BigDecimal THRESHOLD_PERCENTAGE = BigDecimal.valueOf(20);
     private static final int SCALE = 2;
@@ -61,7 +63,7 @@ public class ChargeService {
     /**
      * Get store ID from store context (set by StoreContextInterceptor).
      */
-    private Long getStoreId() {
+    private Long getContextStoreId() {
         Long storeId = CurrentStoreContext.getCurrentStoreId();
         if (storeId == null) {
             throw new RuntimeException("Store context not found for current user");
@@ -69,12 +71,17 @@ public class ChargeService {
         return storeId;
     }
 
+    /** Store whose charge rows and FK graph are used (demo → mapped source when configured). */
+    private Long getChargesDataStoreId() {
+        return demoStoreDataSourceResolver.resolveChargesDataStoreId(getContextStoreId());
+    }
+
     /**
      * Get all fixed charges with optional filtering
      * Filters by authenticated user's store
      */
     public List<FixedChargeResponse> getAllFixedCharges(String month, ChargeCategory category, ChargePeriod period) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         
         // Default to current month if not provided
         if (month == null || month.isEmpty()) {
@@ -104,7 +111,7 @@ public class ChargeService {
      * Verifies charge belongs to authenticated user's store
      */
     public FixedChargeDetailResponse getFixedChargeById(Long id, String month) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         
         FixedCharge charge = fixedChargeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Fixed charge not found with id: " + id));
@@ -126,7 +133,7 @@ public class ChargeService {
         validateFixedChargeRequest(request);
 
         // Get store from authenticated user
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new RuntimeException("Store not found with id: " + storeId));
 
@@ -186,7 +193,7 @@ public class ChargeService {
      */
     @Transactional
     public FixedChargeResponse updateFixedCharge(Long id, FixedChargeUpdateRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         
         FixedCharge charge = fixedChargeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Fixed charge not found with id: " + id));
@@ -401,7 +408,7 @@ public class ChargeService {
      */
     @Transactional
     public void deleteFixedCharge(Long id) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         
         FixedCharge charge = fixedChargeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Fixed charge not found with id: " + id));
@@ -419,7 +426,7 @@ public class ChargeService {
      * Filters by authenticated user's store
      */
     public List<FixedChargeResponse> getFixedChargesByMonth(String monthKey) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         List<FixedCharge> charges = fixedChargeRepository.findByStoreIdAndMonthKey(storeId, monthKey);
         return charges.stream()
                 .map(this::toFixedChargeResponse)
@@ -432,7 +439,7 @@ public class ChargeService {
      * Useful for displaying week-by-week breakdown of personnel charges
      */
     public List<FixedChargeResponse> getFixedChargesByWeek(String monthKey, String weekKey, ChargeCategory category) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         List<FixedCharge> charges;
         
         if (category != null) {
@@ -452,7 +459,7 @@ public class ChargeService {
      * Filters by authenticated user's store
      */
     public List<PersonnelEmployeeResponse> getAvailableEmployees(EmployeeType type) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         List<Employee> employees = employeeRepository.findByStoreIdAndType(storeId, type);
         
         // Convert Employee entities to PersonnelEmployeeResponse
@@ -474,7 +481,7 @@ public class ChargeService {
      * Filters by authenticated user's store
      */
     public List<VariableChargeResponse> getAllVariableCharges(LocalDate startDate, LocalDate endDate, String category) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         List<VariableCharge> charges;
         
         // Handle null parameters - JPQL doesn't handle IS NULL well with parameters
@@ -505,7 +512,7 @@ public class ChargeService {
      * Verifies charge belongs to authenticated user's store
      */
     public VariableChargeResponse getVariableChargeById(Long id) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         
         VariableCharge charge = variableChargeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Variable charge not found with id: " + id));
@@ -525,7 +532,7 @@ public class ChargeService {
      */
     @Transactional
     public VariableChargeResponse createVariableCharge(VariableChargeCreateRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new RuntimeException("Store not found with id: " + storeId));
 
@@ -607,7 +614,7 @@ public class ChargeService {
      */
     @Transactional
     public VariableChargeResponse updateVariableCharge(Long id, VariableChargeUpdateRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         VariableCharge charge = variableChargeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Variable charge not found with id: " + id));
         if (!charge.getStore().getId().equals(storeId)) {
@@ -700,7 +707,7 @@ public class ChargeService {
      */
     @Transactional
     public void deleteVariableCharge(Long id) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         
         VariableCharge charge = variableChargeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Variable charge not found with id: " + id));
@@ -722,7 +729,7 @@ public class ChargeService {
      * GET /api/charges/variable/main-categories
      */
     public List<VariableChargeMainCategoryResponse> getVariableChargeMainCategories() {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         return variableChargeMainCategoryRepository.findByStoreIdOrderBySortOrderAsc(storeId).stream()
                 .map(this::toVariableChargeMainCategoryResponse)
                 .collect(Collectors.toList());
@@ -733,7 +740,7 @@ public class ChargeService {
      * GET /api/charges/variable/main-categories/{id}
      */
     public VariableChargeMainCategoryResponse getVariableChargeMainCategoryById(Long id) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         VariableChargeMainCategory category = variableChargeMainCategoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Variable charge main category not found with id: " + id));
         if (!category.getStore().getId().equals(storeId)) {
@@ -748,7 +755,7 @@ public class ChargeService {
      */
     @Transactional
     public VariableChargeMainCategoryResponse createVariableChargeMainCategory(CreateVariableChargeMainCategoryRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new RuntimeException("Store not found with id: " + storeId));
 
@@ -769,7 +776,7 @@ public class ChargeService {
      */
     @Transactional
     public VariableChargeMainCategoryResponse updateVariableChargeMainCategory(Long id, UpdateVariableChargeMainCategoryRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         VariableChargeMainCategory category = variableChargeMainCategoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Variable charge main category not found with id: " + id));
         if (!category.getStore().getId().equals(storeId)) {
@@ -796,7 +803,7 @@ public class ChargeService {
      */
     @Transactional
     public void deleteVariableChargeMainCategory(Long id) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         VariableChargeMainCategory category = variableChargeMainCategoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Variable charge main category not found with id: " + id));
         if (!category.getStore().getId().equals(storeId)) {
@@ -821,7 +828,7 @@ public class ChargeService {
      * GET /api/charges/variable/main-categories/{mainCategoryId}/sub-categories
      */
     public List<VariableChargeSubCategoryResponse> getSubCategoriesByMainCategoryId(Long mainCategoryId) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         VariableChargeMainCategory mainCategory = variableChargeMainCategoryRepository.findById(mainCategoryId)
                 .orElseThrow(() -> new RuntimeException("Variable charge main category not found with id: " + mainCategoryId));
         if (!mainCategory.getStore().getId().equals(storeId)) {
@@ -837,7 +844,7 @@ public class ChargeService {
      * GET /api/charges/variable/sub-categories/{subCategoryId}/children
      */
     public List<VariableChargeSubCategoryResponse> getSubCategoryChildren(Long subCategoryId) {
-        Long storeId = getStoreId();
+        Long storeId = getChargesDataStoreId();
         VariableChargeSubCategory parent = variableChargeSubCategoryRepository.findById(subCategoryId)
                 .orElseThrow(() -> new RuntimeException("Variable charge sub-category not found with id: " + subCategoryId));
         if (!parent.getMainCategory().getStore().getId().equals(storeId)) {

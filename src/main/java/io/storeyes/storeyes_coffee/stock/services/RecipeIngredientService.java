@@ -9,6 +9,7 @@ import io.storeyes.storeyes_coffee.stock.entities.RecipeIngredient;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.stock.repositories.RecipeIngredientRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class RecipeIngredientService {
     private final StockProductRepository stockProductRepository;
     private final ArticleService articleService;
     private final StoreService storeService;
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreId() {
         String userId = KeycloakTokenUtils.getUserId();
@@ -36,15 +38,19 @@ public class RecipeIngredientService {
         return storeService.getStoreByOwnerId(userId).getId();
     }
 
+    private Long getStockDataStoreId() {
+        return demoStoreDataSourceResolver.resolveStockDataStoreId(getStoreId());
+    }
+
     public List<RecipeIngredientResponse> getRecipeByArticleId(Long articleId) {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         Article article = articleService.getArticleEntity(articleId, storeId);
         List<RecipeIngredient> list = recipeIngredientRepository.findByArticleIdOrderByProductName(article.getId());
         return list.stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     public RecipeIngredientResponse getRecipeIngredientById(Long articleId, Long id) {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         articleService.getArticleEntity(articleId, storeId);
         RecipeIngredient ri = recipeIngredientRepository.findByIdAndArticleId(id, articleId)
                 .orElseThrow(() -> new RuntimeException("Recipe ingredient not found with id: " + id));
@@ -53,7 +59,7 @@ public class RecipeIngredientService {
 
     @Transactional
     public RecipeIngredientResponse createRecipeIngredient(Long articleId, CreateRecipeIngredientRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         Article article = articleService.getArticleEntity(articleId, storeId);
         StockProduct product = stockProductRepository.findById(request.getProductId())
                 .orElseThrow(() -> new RuntimeException("Stock product not found with id: " + request.getProductId()));
@@ -74,7 +80,7 @@ public class RecipeIngredientService {
 
     @Transactional
     public RecipeIngredientResponse updateRecipeIngredient(Long articleId, Long id, UpdateRecipeIngredientRequest request) {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         articleService.getArticleEntity(articleId, storeId);
         RecipeIngredient ri = recipeIngredientRepository.findByIdAndArticleId(id, articleId)
                 .orElseThrow(() -> new RuntimeException("Recipe ingredient not found with id: " + id));
@@ -87,7 +93,7 @@ public class RecipeIngredientService {
 
     @Transactional
     public void deleteRecipeIngredient(Long articleId, Long id) {
-        Long storeId = getStoreId();
+        Long storeId = getStockDataStoreId();
         articleService.getArticleEntity(articleId, storeId);
         if (!recipeIngredientRepository.findByIdAndArticleId(id, articleId).isPresent()) {
             throw new RuntimeException("Recipe ingredient not found with id: " + id);

@@ -14,6 +14,7 @@ import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.SupplierStockProductRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class StockProductService {
     private final StoreService storeService;
     private final SupplierStockProductRepository supplierStockProductRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreId() {
         String userId = KeycloakTokenUtils.getUserId();
@@ -52,6 +54,7 @@ public class StockProductService {
      */
     public List<StockProductResponse> getProducts(Long subCategoryId, String search) {
         Long storeId = getStoreId();
+        Long dataStoreId = demoStoreDataSourceResolver.resolveStockDataStoreId(storeId);
         List<StockProduct> products;
 
         // When a subCategoryId is provided, include products linked directly to that sub-category
@@ -60,14 +63,14 @@ public class StockProductService {
         if (subCategoryId != null && search != null && !search.isBlank()) {
             List<Long> relevantSubCategoryIds = getSubCategoryIdsWithChildren(subCategoryId);
             products = stockProductRepository.findByStoreIdAndSubCategoryIdInAndSearchText(
-                    storeId, relevantSubCategoryIds, search.trim());
+                    dataStoreId, relevantSubCategoryIds, search.trim());
         } else if (subCategoryId != null) {
             List<Long> relevantSubCategoryIds = getSubCategoryIdsWithChildren(subCategoryId);
-            products = stockProductRepository.findByStoreIdAndSubCategoryIdInOrderByNameAsc(storeId, relevantSubCategoryIds);
+            products = stockProductRepository.findByStoreIdAndSubCategoryIdInOrderByNameAsc(dataStoreId, relevantSubCategoryIds);
         } else if (search != null && !search.isBlank()) {
-            products = stockProductRepository.findByStoreIdAndSearchText(storeId, search.trim());
+            products = stockProductRepository.findByStoreIdAndSearchText(dataStoreId, search.trim());
         } else {
-            products = stockProductRepository.findByStoreIdOrderByNameAsc(storeId);
+            products = stockProductRepository.findByStoreIdOrderByNameAsc(dataStoreId);
         }
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId = loadSuppliersByProductId(
                 products.stream().map(StockProduct::getId).collect(Collectors.toList()));
@@ -109,9 +112,10 @@ public class StockProductService {
      */
     public StockProductResponse getProductById(Long id) {
         Long storeId = getStoreId();
+        Long dataStoreId = demoStoreDataSourceResolver.resolveStockDataStoreId(storeId);
         StockProduct product = stockProductRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Stock product not found with id: " + id));
-        if (!product.getStore().getId().equals(storeId)) {
+        if (!product.getStore().getId().equals(dataStoreId)) {
             throw new RuntimeException("Stock product not found with id: " + id);
         }
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId =
