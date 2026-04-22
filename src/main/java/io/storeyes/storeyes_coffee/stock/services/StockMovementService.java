@@ -24,6 +24,15 @@ import io.storeyes.storeyes_coffee.stock.repositories.SupplierStockProductReposi
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import io.storeyes.storeyes_coffee.store.services.StoreService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Tuple;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,6 +42,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -54,6 +64,9 @@ public class StockMovementService {
     private final SupplierStockProductRepository supplierStockProductRepository;
     private final StoreService storeService;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private Long getStoreId() {
         String userId = KeycloakTokenUtils.getUserId();
@@ -192,6 +205,67 @@ public class StockMovementService {
     }
 
     /**
+     * One query: per product, sum quantity and signed amount for real drift after each product's snapshot {@code createdAt}.
+     */
+    private Map<Long, BigDecimal[]> loadRealDriftAfterCutoffs(Long storeId, Map<Long, LocalDateTime> productIdToCutoff) {
+        if (productIdToCutoff.isEmpty()) {
+            return Map.of();
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<StockMovement> m = cq.from(StockMovement.class);
+        Join<StockMovement, Store> storeJoin = m.join("store");
+        Join<StockMovement, StockProduct> productJoin = m.join("product");
+
+        Predicate storeEq = cb.equal(storeJoin.get("id"), storeId);
+        Predicate refOk = cb.or(
+                cb.isNull(m.get("referenceType")),
+                cb.notEqual(m.get("referenceType"), "INVENTORY_VALIDATION"));
+        Predicate typeOk = cb.or(
+                m.get("type").in(Arrays.asList(StockMovementType.PURCHASE, StockMovementType.ADJUSTMENT)),
+                cb.and(
+                        cb.equal(m.get("type"), StockMovementType.CONSUMPTION),
+                        cb.equal(m.get("referenceType"), REFERENCE_TYPE_MANUAL_CONSUMPTION)));
+
+        List<Predicate> cutoffPreds = new ArrayList<>();
+        for (Map.Entry<Long, LocalDateTime> e : productIdToCutoff.entrySet()) {
+            cutoffPreds.add(cb.and(
+                    cb.equal(productJoin.get("id"), e.getKey()),
+                    cb.greaterThan(m.get("createdAt"), cb.literal(e.getValue()))));
+        }
+        Predicate cutoffOr = cb.or(cutoffPreds.toArray(Predicate[]::new));
+
+        Expression<BigDecimal> zero = cb.literal(BigDecimal.ZERO);
+        CriteriaBuilder.Case<BigDecimal> amountCase = cb.selectCase();
+        Expression<BigDecimal> amountLine = amountCase
+                .when(cb.or(
+                                cb.equal(m.get("type"), StockMovementType.PURCHASE),
+                                cb.equal(m.get("type"), StockMovementType.ADJUSTMENT)),
+                        cb.coalesce(m.get("amount"), zero))
+                .when(cb.and(
+                                cb.equal(m.get("type"), StockMovementType.CONSUMPTION),
+                                cb.equal(m.get("referenceType"), REFERENCE_TYPE_MANUAL_CONSUMPTION)),
+                        cb.neg(cb.coalesce(m.get("amount"), zero)))
+                .otherwise(zero);
+
+        cq.multiselect(productJoin.get("id"), cb.sum(m.get("quantity")), cb.sum(amountLine));
+        cq.where(storeEq, refOk, typeOk, cutoffOr);
+        cq.groupBy(productJoin.get("id"));
+
+        Map<Long, BigDecimal[]> out = new HashMap<>();
+        for (Tuple t : entityManager.createQuery(cq).getResultList()) {
+            Long pid = ((Number) t.get(0)).longValue();
+            BigDecimal qty = (BigDecimal) t.get(1);
+            BigDecimal amt = (BigDecimal) t.get(2);
+            out.put(pid, new BigDecimal[]{
+                    qty != null ? qty : BigDecimal.ZERO,
+                    amt != null ? amt : BigDecimal.ZERO
+            });
+        }
+        return out;
+    }
+
+    /**
      * Inventory summary: all store products with estimated and real quantity/value.
      * <p>
      * Estimated: PURCHASE + ADJUSTMENT + ARTICLE_SALE consumption (sales-driven).
@@ -200,7 +274,7 @@ public class StockMovementService {
      */
     public List<StockInventoryItemResponse> getInventorySummary() {
         Long storeId = getStockDataStoreId();
-        List<StockProduct> allProducts = stockProductRepository.findByStoreIdOrderByNameAsc(storeId).stream()
+        List<StockProduct> allProducts = stockProductRepository.findByStoreIdWithSubCategoryOrderByNameAsc(storeId).stream()
                 .filter(p -> {
                     if (p.getSubCategory() == null || p.getSubCategory().getCode() == null) return false;
                     String code = p.getSubCategory().getCode().toLowerCase();
@@ -216,6 +290,12 @@ public class StockMovementService {
         for (StockInventorySnapshot s : allSnapshots) {
             latestSnapshotByProductId.putIfAbsent(s.getProduct().getId(), s);
         }
+
+        Map<Long, LocalDateTime> cutoffByProduct = new HashMap<>();
+        for (Map.Entry<Long, StockInventorySnapshot> e : latestSnapshotByProductId.entrySet()) {
+            cutoffByProduct.put(e.getKey(), e.getValue().getCreatedAt());
+        }
+        Map<Long, BigDecimal[]> driftByProduct = loadRealDriftAfterCutoffs(storeId, cutoffByProduct);
 
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId =
                 loadSuppliersByProductId(allProducts.stream().map(StockProduct::getId).toList());
@@ -249,9 +329,10 @@ public class StockMovementService {
                         // Real = last snapshot + incoming/manual movements after snapshot date.
                         // We intentionally exclude ARTICLE_SALE consumption from real (sales only affect estimated),
                         // so variance appears until the owner counts and validates.
-                        java.time.LocalDateTime afterCreatedAt = lastSnapshot.getCreatedAt();
-                        BigDecimal driftQty = stockMovementRepository.sumQuantityAfterCreatedAtForReal(storeId, product.getId(), afterCreatedAt);
-                        BigDecimal driftAmt = stockMovementRepository.sumAmountAfterCreatedAtForReal(storeId, product.getId(), afterCreatedAt);
+                        BigDecimal[] drift = driftByProduct.getOrDefault(
+                                product.getId(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+                        BigDecimal driftQty = drift[0];
+                        BigDecimal driftAmt = drift[1];
                         realQuantity = lastSnapshot.getBaseQuantity().add(driftQty);
                         if (basePerCounting != null && basePerCounting.compareTo(BigDecimal.ZERO) > 0) {
                             // Always derive from realQuantity so purchases/drift are reflected (snapshot counting qty is stale).

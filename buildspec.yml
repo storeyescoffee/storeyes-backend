@@ -4,6 +4,10 @@ phases:
   install:
     runtime-versions:
       java: corretto21
+  pre_build:
+    commands:
+      - mkdir -p certs
+      - curl -o certs/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
   build:
     commands:
       - mvn clean package -DskipTests
@@ -13,4 +17,5 @@ artifacts:
   files:
     - backend/**
     - scripts/**
+    - certs/**
     - docker-compose.yml

@@ -64,8 +64,11 @@ public class KpiService {
         DateDimension dateDimension = dateDimensionRepository.findByDate(date)
                 .orElseThrow(() -> new RuntimeException("Date dimension not found for date: " + date));
 
-        FactKpiDaily dailyKpi = factKpiDailyRepository.findByStoreIdAndDate(dataStoreId, dateDimension)
-                .orElseThrow(() -> new RuntimeException("Daily KPI not found for store: " + dataStoreId + " and date: " + date));
+        Optional<FactKpiDaily> dailyKpiOpt = factKpiDailyRepository.findByStoreIdAndDate(dataStoreId, dateDimension);
+        if (dailyKpiOpt.isEmpty()) {
+            return buildDailyReportWhenNoKpiRow(store, date, dataStoreId, mult);
+        }
+        FactKpiDaily dailyKpi = dailyKpiOpt.get();
 
         List<FactKpiHourly> hourlyKpis = factKpiHourlyRepository.findByStoreIdAndDateOrderByHourAsc(dataStoreId, dateDimension);
 
@@ -427,6 +430,50 @@ public class KpiService {
         return InsightsDTO.RevenueComparisonDTO.builder()
                 .vsPreviousDay(vsPreviousDay)
                 .vsPreviousWeek(vsPreviousWeek)
+                .build();
+    }
+
+    /**
+     * When no {@link FactKpiDaily} row exists yet for the KPI source store and date (e.g. future day or ETL lag).
+     */
+    private DailyReportDTO buildDailyReportWhenNoKpiRow(Store store, LocalDate date, Long dataStoreId, double mult) {
+        List<HourlyDataDTO> hourlyData = new ArrayList<>();
+        for (int hour = 0; hour < 24; hour++) {
+            hourlyData.add(HourlyDataDTO.builder()
+                    .hour(formatHour(hour))
+                    .revenue(0.0)
+                    .transactions(0)
+                    .itemsSold(0)
+                    .build());
+        }
+        RevenueDTO revenue = RevenueDTO.builder()
+                .totalTTC(0.0)
+                .totalHT(0.0)
+                .transactions(0)
+                .avgTransactionValue(0.0)
+                .revenuePerTransaction(0.0)
+                .tpe(null)
+                .espece(null)
+                .build();
+        List<PeakPeriodDTO> peakPeriods = Collections.emptyList();
+        InsightsDTO insights = calculateInsights(
+                Collections.emptyList(),
+                Collections.emptyList(),
+                peakPeriods,
+                dataStoreId,
+                date,
+                mult);
+        return DailyReportDTO.builder()
+                .date(date.format(DATE_FORMATTER))
+                .businessName(store.getName())
+                .revenue(revenue)
+                .hourlyData(hourlyData)
+                .topProductsByQuantity(Collections.emptyList())
+                .topProductsByRevenue(Collections.emptyList())
+                .categoryAnalysis(Collections.emptyList())
+                .staffPerformance(Collections.emptyList())
+                .peakPeriods(peakPeriods)
+                .insights(insights)
                 .build();
     }
     

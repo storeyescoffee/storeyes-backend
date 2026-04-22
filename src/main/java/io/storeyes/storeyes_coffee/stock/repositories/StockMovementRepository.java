@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,6 +18,11 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     List<StockMovement> findByStoreIdAndProductIdOrderByMovementDateDescIdDesc(Long storeId, Long productId);
 
     boolean existsByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
+
+    @Query("SELECT DISTINCT m.referenceId FROM StockMovement m WHERE m.referenceType = :referenceType AND m.referenceId IN :referenceIds")
+    List<Long> findReferenceIdsByReferenceTypeAndReferenceIdIn(
+            @Param("referenceType") String referenceType,
+            @Param("referenceIds") Collection<Long> referenceIds);
 
     Optional<StockMovement> findByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
 

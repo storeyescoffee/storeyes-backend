@@ -1,6 +1,6 @@
-package io.storeyes.adminpanel.accesscontrol.repositories;
+package io.storeyes.storeyes_coffee.accesscontrol.repositories;
 
-import io.storeyes.adminpanel.accesscontrol.entities.ACStaff;
+import io.storeyes.storeyes_coffee.accesscontrol.entities.ACStaff;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

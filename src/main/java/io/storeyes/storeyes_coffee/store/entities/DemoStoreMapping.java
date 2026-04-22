@@ -57,6 +57,10 @@ public class DemoStoreMapping {
     @JoinColumn(name = "charges_source_store_id")
     private Store chargesSourceStore;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "access_source_store_id")
+    private Store accessSourceStore;
+
     @Column(name = "created_at", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
     @CreationTimestamp

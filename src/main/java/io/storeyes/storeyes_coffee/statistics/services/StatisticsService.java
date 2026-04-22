@@ -7,12 +7,11 @@ import io.storeyes.storeyes_coffee.charges.entities.VariableCharge;
 import io.storeyes.storeyes_coffee.charges.repositories.FixedChargeRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeRepository;
 import io.storeyes.storeyes_coffee.charges.utils.WeekCalculationUtils;
-import io.storeyes.storeyes_coffee.kpi.entities.DateDimension;
 import io.storeyes.storeyes_coffee.kpi.entities.FactKpiDaily;
-import io.storeyes.storeyes_coffee.kpi.repositories.DateDimensionRepository;
 import io.storeyes.storeyes_coffee.kpi.repositories.FactKpiDailyRepository;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.statistics.dto.*;
+import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -35,9 +34,15 @@ public class StatisticsService {
     private static record FixedChargeWithAmount(FixedCharge charge, BigDecimal effectiveAmount) {}
 
     private final FactKpiDailyRepository factKpiDailyRepository;
-    private final DateDimensionRepository dateDimensionRepository;
     private final FixedChargeRepository fixedChargeRepository;
     private final VariableChargeRepository variableChargeRepository;
+    private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
+
+    /**
+     * KPI/revenue facts come from {@link #kpiDataStoreId} with {@link #revenueMultiplier};
+     * fixed/variable charges come from {@link #chargesStoreId} (demo mapping).
+     */
+    private record StatisticsStoreContext(Long kpiDataStoreId, double revenueMultiplier, Long chargesStoreId) {}
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");
@@ -47,7 +52,7 @@ public class StatisticsService {
      * Get comprehensive statistics for a specific period
      */
     public StatisticsResponse getStatistics(String period, String date) {
-        Long storeId = getStoreId();
+        StatisticsStoreContext ctx = resolveStatisticsStores();
         
         // Parse date based on period type
         LocalDate startDate;
@@ -85,12 +90,12 @@ public class StatisticsService {
         }
         
         // Fetch revenue
-        BigDecimal revenue = getRevenueForPeriod(storeId, startDate, endDate);
-        BigDecimal previousRevenue = getRevenueForPeriod(storeId, previousStartDate, previousEndDate);
+        BigDecimal revenue = getRevenueForPeriod(ctx, startDate, endDate);
+        BigDecimal previousRevenue = getRevenueForPeriod(ctx, previousStartDate, previousEndDate);
         
         // Fetch charges
-        BigDecimal fixedChargesTotal = getFixedChargesForPeriod(storeId, period, date);
-        BigDecimal variableChargesTotal = getVariableChargesForPeriod(storeId, startDate, endDate);
+        BigDecimal fixedChargesTotal = getFixedChargesForPeriod(ctx, period, date);
+        BigDecimal variableChargesTotal = getVariableChargesForPeriod(ctx, startDate, endDate);
         BigDecimal totalCharges = fixedChargesTotal.add(variableChargesTotal);
         
         // Calculate KPIs
@@ -113,10 +118,10 @@ public class StatisticsService {
                 .build();
         
         // Generate chart data
-        List<ChartDataDTO> chartData = generateChartData(storeId, period, date);
+        List<ChartDataDTO> chartData = generateChartData(ctx, period, date);
         
         // Get charges breakdown
-        ChargesDTO charges = getChargesBreakdown(storeId, period, date, startDate, endDate, totalCharges, revenue);
+        ChargesDTO charges = getChargesBreakdown(ctx, period, date, startDate, endDate, totalCharges, revenue);
         
         return StatisticsResponse.builder()
                 .period(period)
@@ -130,7 +135,7 @@ public class StatisticsService {
      * Get detailed charges breakdown
      */
     public ChargesDetailResponse getChargesDetail(String period, String month, String week) {
-        Long storeId = getStoreId();
+        StatisticsStoreContext ctx = resolveStatisticsStores();
         
         if (!period.equalsIgnoreCase("week") && !period.equalsIgnoreCase("month")) {
             throw new RuntimeException("Period must be 'week' or 'month'");
@@ -155,16 +160,16 @@ public class StatisticsService {
         }
         
         // Fetch revenue
-        BigDecimal revenue = getRevenueForPeriod(storeId, startDate, endDate);
+        BigDecimal revenue = getRevenueForPeriod(ctx, startDate, endDate);
         
         // Fetch fixed charges with effective amounts (prorated for week period)
         String dateParam = period.equalsIgnoreCase("week") ? week : month;
-        List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(storeId, period, dateParam, week);
+        List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(ctx, period, dateParam, week);
         BigDecimal totalFixedCharges = fixedWithAmounts.stream()
                 .map(FixedChargeWithAmount::effectiveAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        List<VariableCharge> variableCharges = variableChargeRepository.findByStoreIdAndDateRange(storeId, startDate, endDate);
+        List<VariableCharge> variableCharges = variableChargeRepository.findByStoreIdAndDateRange(ctx.chargesStoreId(), startDate, endDate);
         BigDecimal totalVariableCharges = variableCharges.stream()
                 .map(VariableCharge::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -200,32 +205,24 @@ public class StatisticsService {
     }
 
     /**
-     * Get revenue for a date range
+     * Get revenue for a date range (KPI facts from demo {@link StatisticsStoreContext#kpiDataStoreId}, scaled by multiplier).
      */
-    private BigDecimal getRevenueForPeriod(Long storeId, LocalDate startDate, LocalDate endDate) {
-        List<DateDimension> dates = new ArrayList<>();
-        LocalDate current = startDate;
-        while (!current.isAfter(endDate)) {
-            dateDimensionRepository.findByDate(current).ifPresent(dates::add);
-            current = current.plusDays(1);
-        }
-        
-        BigDecimal total = BigDecimal.ZERO;
-        for (DateDimension date : dates) {
-            Optional<FactKpiDaily> daily = factKpiDailyRepository.findByStoreIdAndDate(storeId, date);
-            if (daily.isPresent()) {
-                total = total.add(BigDecimal.valueOf(daily.get().getTotalRevenueTtc()));
-            }
-        }
-        
+    private BigDecimal getRevenueForPeriod(StatisticsStoreContext ctx, LocalDate startDate, LocalDate endDate) {
+        BigDecimal mult = BigDecimal.valueOf(ctx.revenueMultiplier());
+        List<FactKpiDaily> rows = factKpiDailyRepository.findAllByStoreIdAndDateBetween(
+                ctx.kpiDataStoreId(), startDate, endDate);
+        BigDecimal total = rows.stream()
+                .map(FactKpiDaily::getTotalRevenueTtc)
+                .map(ttc -> ttc != null ? BigDecimal.valueOf(ttc).multiply(mult) : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         return total.setScale(SCALE, RoundingMode.HALF_UP);
     }
 
     /**
      * Get fixed charges total for a period (uses effective amounts: prorated for week/day).
      */
-    private BigDecimal getFixedChargesForPeriod(Long storeId, String period, String date) {
-        List<FixedChargeWithAmount> withAmounts = getFixedChargesWithEffectiveAmounts(storeId, period, date, null);
+    private BigDecimal getFixedChargesForPeriod(StatisticsStoreContext ctx, String period, String date) {
+        List<FixedChargeWithAmount> withAmounts = getFixedChargesWithEffectiveAmounts(ctx, period, date, null);
         return withAmounts.stream()
                 .map(FixedChargeWithAmount::effectiveAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -238,7 +235,8 @@ public class StatisticsService {
      * For month: all fixed for month at full amount.
      * For day: monthly prorated by days in month; weekly for that week prorated by 7.
      */
-    private List<FixedChargeWithAmount> getFixedChargesWithEffectiveAmounts(Long storeId, String period, String date, String week) {
+    private List<FixedChargeWithAmount> getFixedChargesWithEffectiveAmounts(StatisticsStoreContext ctx, String period, String date, String week) {
+        Long chargesStoreId = ctx.chargesStoreId();
         if (period.equalsIgnoreCase("day")) {
             LocalDate dayDate = LocalDate.parse(date, DATE_FORMATTER);
             String monthKey = dayDate.format(MONTH_FORMATTER);
@@ -248,7 +246,7 @@ public class StatisticsService {
             String weekKey = WeekCalculationUtils.generateWeekKey(monday);
 
             List<FixedChargeWithAmount> result = new ArrayList<>();
-            List<FixedCharge> monthCharges = fixedChargeRepository.findByStoreIdAndMonthKey(storeId, monthKey);
+            List<FixedCharge> monthCharges = fixedChargeRepository.findByStoreIdAndMonthKey(chargesStoreId, monthKey);
             for (FixedCharge c : monthCharges) {
                 if (c.getPeriod() == ChargePeriod.MONTH) {
                     BigDecimal effective = daysInMonth > 0
@@ -257,7 +255,7 @@ public class StatisticsService {
                     result.add(new FixedChargeWithAmount(c, effective));
                 }
             }
-            List<FixedCharge> weekCharges = fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(storeId, monthKey, weekKey);
+            List<FixedCharge> weekCharges = fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(chargesStoreId, monthKey, weekKey);
             for (FixedCharge c : weekCharges) {
                 if (c.getPeriod() == ChargePeriod.WEEK) {
                     BigDecimal effective = c.getAmount().divide(BigDecimal.valueOf(7), SCALE, RoundingMode.HALF_UP);
@@ -274,21 +272,21 @@ public class StatisticsService {
             int weeksCount = WeekCalculationUtils.getWeeksCountInMonth(monthKey);
 
             List<FixedChargeWithAmount> result = new ArrayList<>();
-            List<FixedCharge> monthCharges = fixedChargeRepository.findByStoreIdAndMonthKey(storeId, monthKey);
+            List<FixedCharge> monthCharges = fixedChargeRepository.findByStoreIdAndMonthKey(chargesStoreId, monthKey);
             for (FixedCharge c : monthCharges) {
                 if (c.getPeriod() == ChargePeriod.MONTH) {
                     BigDecimal effective = c.getAmount().divide(BigDecimal.valueOf(weeksCount), SCALE, RoundingMode.HALF_UP);
                     result.add(new FixedChargeWithAmount(c, effective));
                 }
             }
-            List<FixedCharge> weekCharges = fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(storeId, monthKey, mondayWeekKey);
+            List<FixedCharge> weekCharges = fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(chargesStoreId, monthKey, mondayWeekKey);
             for (FixedCharge c : weekCharges) {
                 result.add(new FixedChargeWithAmount(c, c.getAmount()));
             }
             return result;
         } else {
             // month
-            List<FixedCharge> charges = fixedChargeRepository.findByStoreIdAndMonthKey(storeId, date);
+            List<FixedCharge> charges = fixedChargeRepository.findByStoreIdAndMonthKey(chargesStoreId, date);
             return charges.stream()
                     .map(c -> new FixedChargeWithAmount(c, c.getAmount()))
                     .collect(Collectors.toList());
@@ -298,8 +296,8 @@ public class StatisticsService {
     /**
      * Get variable charges total for a date range
      */
-    private BigDecimal getVariableChargesForPeriod(Long storeId, LocalDate startDate, LocalDate endDate) {
-        List<VariableCharge> charges = variableChargeRepository.findByStoreIdAndDateRange(storeId, startDate, endDate);
+    private BigDecimal getVariableChargesForPeriod(StatisticsStoreContext ctx, LocalDate startDate, LocalDate endDate) {
+        List<VariableCharge> charges = variableChargeRepository.findByStoreIdAndDateRange(ctx.chargesStoreId(), startDate, endDate);
         return charges.stream()
                 .map(VariableCharge::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -309,14 +307,14 @@ public class StatisticsService {
     /**
      * Generate chart data based on period type
      */
-    private List<ChartDataDTO> generateChartData(Long storeId, String period, String date) {
+    private List<ChartDataDTO> generateChartData(StatisticsStoreContext ctx, String period, String date) {
         switch (period.toLowerCase()) {
             case "day":
-                return generateDayChartData(storeId, date);
+                return generateDayChartData(ctx, date);
             case "week":
-                return generateWeekChartData(storeId, date);
+                return generateWeekChartData(ctx, date);
             case "month":
-                return generateMonthChartData(storeId, date);
+                return generateMonthChartData(ctx, date);
             default:
                 return Collections.emptyList();
         }
@@ -325,13 +323,14 @@ public class StatisticsService {
     /**
      * Generate chart data for day period (shows week: Mon-Sun)
      */
-    private List<ChartDataDTO> generateDayChartData(Long storeId, String date) {
+    private List<ChartDataDTO> generateDayChartData(StatisticsStoreContext ctx, String date) {
+        Long chargesStoreId = ctx.chargesStoreId();
         LocalDate dayDate = LocalDate.parse(date, DATE_FORMATTER);
         LocalDate monday = WeekCalculationUtils.getMondayOfWeek(dayDate);
         String monthKey = monday.format(MONTH_FORMATTER);
         
         // Get monthly fixed charges once and calculate daily average
-        List<FixedCharge> monthlyCharges = fixedChargeRepository.findByStoreIdAndMonthKey(storeId, monthKey);
+        List<FixedCharge> monthlyCharges = fixedChargeRepository.findByStoreIdAndMonthKey(chargesStoreId, monthKey);
         BigDecimal monthlyFixedTotal = monthlyCharges.stream()
                 .filter(c -> c.getPeriod() == ChargePeriod.MONTH)
                 .map(FixedCharge::getAmount)
@@ -350,7 +349,7 @@ public class StatisticsService {
         
         // Get weekly charges for the week
         List<FixedCharge> weeklyCharges = fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(
-                storeId, monthKey, WeekCalculationUtils.generateWeekKey(monday));
+                chargesStoreId, monthKey, WeekCalculationUtils.generateWeekKey(monday));
         BigDecimal weeklyFixedTotal = weeklyCharges.stream()
                 .filter(c -> c.getPeriod() == ChargePeriod.WEEK)
                 .map(FixedCharge::getAmount)
@@ -368,8 +367,8 @@ public class StatisticsService {
         
         for (int i = 0; i < 7; i++) {
             LocalDate currentDate = monday.plusDays(i);
-            BigDecimal revenue = getRevenueForPeriod(storeId, currentDate, currentDate);
-            BigDecimal variableCharges = getVariableChargesForPeriod(storeId, currentDate, currentDate);
+            BigDecimal revenue = getRevenueForPeriod(ctx, currentDate, currentDate);
+            BigDecimal variableCharges = getVariableChargesForPeriod(ctx, currentDate, currentDate);
             BigDecimal charges = dailyFixedCharges.add(variableCharges);
             BigDecimal profit = revenue.subtract(charges);
             
@@ -388,7 +387,7 @@ public class StatisticsService {
      * Generate chart data for week period (shows weeks in month: W1, W2, W3, W4).
      * Fixed charges per week = prorated monthly + full weekly for that week.
      */
-    private List<ChartDataDTO> generateWeekChartData(Long storeId, String weekKey) {
+    private List<ChartDataDTO> generateWeekChartData(StatisticsStoreContext ctx, String weekKey) {
         LocalDate weekDate = LocalDate.parse(weekKey, DATE_FORMATTER);
         LocalDate monday = WeekCalculationUtils.getMondayOfWeek(weekDate);
         String monthKey = monday.format(MONTH_FORMATTER);
@@ -402,13 +401,13 @@ public class StatisticsService {
             LocalDate weekMonday = week.getStartDate();
             LocalDate weekSunday = week.getEndDate();
 
-            BigDecimal revenue = getRevenueForPeriod(storeId, weekMonday, weekSunday);
-            List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(storeId, "week", null, week.getWeekKey());
+            BigDecimal revenue = getRevenueForPeriod(ctx, weekMonday, weekSunday);
+            List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(ctx, "week", null, week.getWeekKey());
             BigDecimal fixedCharges = fixedWithAmounts.stream()
                     .map(FixedChargeWithAmount::effectiveAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
                     .setScale(SCALE, RoundingMode.HALF_UP);
-            BigDecimal variableCharges = getVariableChargesForPeriod(storeId, weekMonday, weekSunday);
+            BigDecimal variableCharges = getVariableChargesForPeriod(ctx, weekMonday, weekSunday);
             BigDecimal charges = fixedCharges.add(variableCharges);
             BigDecimal profit = revenue.subtract(charges);
 
@@ -428,7 +427,7 @@ public class StatisticsService {
     /**
      * Generate chart data for month period (shows last 4 months)
      */
-    private List<ChartDataDTO> generateMonthChartData(Long storeId, String monthKey) {
+    private List<ChartDataDTO> generateMonthChartData(StatisticsStoreContext ctx, String monthKey) {
         YearMonth currentMonth = YearMonth.parse(monthKey, MONTH_FORMATTER);
         
         List<ChartDataDTO> chartData = new ArrayList<>();
@@ -439,9 +438,9 @@ public class StatisticsService {
             LocalDate monthStart = month.atDay(1);
             LocalDate monthEnd = month.atEndOfMonth();
             
-            BigDecimal revenue = getRevenueForPeriod(storeId, monthStart, monthEnd);
-            BigDecimal fixedCharges = getFixedChargesForPeriod(storeId, "month", month.format(MONTH_FORMATTER));
-            BigDecimal variableCharges = getVariableChargesForPeriod(storeId, monthStart, monthEnd);
+            BigDecimal revenue = getRevenueForPeriod(ctx, monthStart, monthEnd);
+            BigDecimal fixedCharges = getFixedChargesForPeriod(ctx, "month", month.format(MONTH_FORMATTER));
+            BigDecimal variableCharges = getVariableChargesForPeriod(ctx, monthStart, monthEnd);
             BigDecimal charges = fixedCharges.add(variableCharges);
             BigDecimal profit = revenue.subtract(charges);
             
@@ -461,15 +460,15 @@ public class StatisticsService {
     /**
      * Get charges breakdown (uses effective amounts for fixed charges in week/day).
      */
-    private ChargesDTO getChargesBreakdown(Long storeId, String period, String date,
+    private ChargesDTO getChargesBreakdown(StatisticsStoreContext ctx, String period, String date,
                                           LocalDate startDate, LocalDate endDate,
                                           BigDecimal totalCharges, BigDecimal revenue) {
-        List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(storeId, period, date, null);
+        List<FixedChargeWithAmount> fixedWithAmounts = getFixedChargesWithEffectiveAmounts(ctx, period, date, null);
         List<ChargeItemDTO> fixedDTOs = fixedWithAmounts.stream()
                 .map(w -> toChargeItemDTO(w.charge(), w.effectiveAmount(), totalCharges, revenue))
                 .collect(Collectors.toList());
 
-        List<VariableCharge> variableCharges = variableChargeRepository.findByStoreIdAndDateRange(storeId, startDate, endDate);
+        List<VariableCharge> variableCharges = variableChargeRepository.findByStoreIdAndDateRange(ctx.chargesStoreId(), startDate, endDate);
         List<ChargeItemDTO> variableDTOs = variableCharges.stream()
                 .map(charge -> toChargeItemDTO(charge, totalCharges, revenue))
                 .collect(Collectors.toList());
@@ -607,6 +606,16 @@ public class StatisticsService {
         } else {
             return "good";
         }
+    }
+
+    /**
+     * Resolves KPI/revenue source and charges source for the current context store (demo mappings when configured).
+     */
+    private StatisticsStoreContext resolveStatisticsStores() {
+        Long contextStoreId = getStoreId();
+        DemoStoreDataSourceResolver.KpiDataContext kpiCtx = demoStoreDataSourceResolver.resolveKpiContext(contextStoreId);
+        Long chargesStoreId = demoStoreDataSourceResolver.resolveChargesDataStoreId(contextStoreId);
+        return new StatisticsStoreContext(kpiCtx.dataStoreId(), kpiCtx.revenueQuantityMultiplier(), chargesStoreId);
     }
 
     /**

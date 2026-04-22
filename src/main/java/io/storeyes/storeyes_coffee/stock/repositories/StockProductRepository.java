@@ -13,6 +13,9 @@ public interface StockProductRepository extends JpaRepository<StockProduct, Long
 
     List<StockProduct> findByStoreIdOrderByNameAsc(Long storeId);
 
+    @Query("SELECT DISTINCT p FROM StockProduct p JOIN FETCH p.subCategory WHERE p.store.id = :storeId ORDER BY p.name ASC")
+    List<StockProduct> findByStoreIdWithSubCategoryOrderByNameAsc(@Param("storeId") Long storeId);
+
     List<StockProduct> findByStoreIdAndSubCategoryIdOrderByNameAsc(Long storeId, Long subCategoryId);
 
     List<StockProduct> findByStoreIdAndNameContainingIgnoreCaseOrderByNameAsc(Long storeId, String search);

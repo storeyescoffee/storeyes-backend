@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,4 +22,12 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     /** Find article by exact name ignoring case for a given store. Used to link SalesProduct -> Article. */
     Optional<Article> findFirstByStoreIdAndNameIgnoreCase(Long storeId, String name);
+
+    /**
+     * Articles whose normalized name (trim + lower) is in {@code lowerNames}. Used to batch-resolve sales lines.
+     */
+    @Query("SELECT a FROM Article a WHERE a.store.id = :storeId AND LOWER(TRIM(a.name)) IN :lowerNames")
+    List<Article> findByStoreIdAndNameLowerTrimmedIn(
+            @Param("storeId") Long storeId,
+            @Param("lowerNames") Collection<String> lowerNames);
 }

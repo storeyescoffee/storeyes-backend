@@ -1,4 +1,4 @@
-package io.storeyes.adminpanel.accesscontrol.entities;
+package io.storeyes.storeyes_coffee.accesscontrol.entities;
 
 import jakarta.persistence.*;
 import lombok.Data;

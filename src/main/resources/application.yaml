@@ -8,31 +8,43 @@ spring:
     name: storeyes-coffee
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/storeyes_coffee}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-test-query: SELECT 1
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: false
+    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
-  # Keycloak OAuth2 Resource Server Configuration
   security:
     oauth2:
       resourceserver:
         jwt:
-          # Keycloak issuer URI - used for token validation
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://15.216.37.183/realms/storeyes}
-          # JWKS URI - direct endpoint to fetch public keys
           jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://15.216.37.183/realms/storeyes/protocol/openid-connect/certs}
-          # Expected audience (client ID) - validates that token was issued for this client
           audience: ${KEYCLOAK_AUDIENCE:storeyes-mobile}
+
+logging:
+  level:
+    root: INFO
+    io.storeyes: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
 server:
   port: ${SERVER_PORT:8443}

@@ -5,16 +5,18 @@ services:
     working_dir: /app
     volumes:
       - /opt/storeyes/backend:/app
+      - /opt/storeyes/certs/global-bundle.pem:/app/global-bundle.pem:ro
     command: java -jar /app/app.jar
     ports:
       - "8080:8080"
+      - "8443:8443"
     environment:
-      # Database configuration
-      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
-      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
-      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      # Database configuration (AWS RDS)
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://${POSTGRES_HOST}:5432/${POSTGRES_DB}?sslmode=verify-full&sslrootcert=/app/global-bundle.pem
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
       # Server configuration
-      - SERVER_PORT=${SERVER_PORT:-8080}
+      - SERVER_PORT=${SERVER_PORT:-8443}
       # Keycloak configuration
       - KEYCLOAK_ISSUER_URI=${KEYCLOAK_ISSUER_URI:-http://15.216.37.183/realms/storeyes}
       - KEYCLOAK_JWKS_URI=${KEYCLOAK_JWKS_URI:-http://15.216.37.183/realms/storeyes/protocol/openid-connect/certs}
@@ -24,6 +26,11 @@ services:
       - SSL_KEYSTORE_PASSWORD=${SSL_KEYSTORE_PASSWORD:-sahtout@2026}
       - SSL_KEYSTORE_TYPE=${SSL_KEYSTORE_TYPE:-PKCS12}
       - SSL_KEY_ALIAS=${SSL_KEY_ALIAS:-storeyes-blue}
+      # AWS configuration
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME:-storeyes-documents}
+      - AWS_S3_REGION=${AWS_S3_REGION:-eu-south-2}
     restart: unless-stopped
     networks:
       - storeyes-network

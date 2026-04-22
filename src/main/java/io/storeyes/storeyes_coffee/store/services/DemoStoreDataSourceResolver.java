@@ -62,5 +62,17 @@ public class DemoStoreDataSourceResolver {
                 .orElse(contextStoreId);
     }
 
+    /**
+     * Access-control events (and related data) are read from this store when the context store is a demo
+     * with {@link DemoStoreMapping#getAccessSourceStore()} set; otherwise {@code contextStoreId}.
+     */
+    public Long resolveAccessDataStoreId(Long contextStoreId) {
+        return demoStoreMappingRepository.findByDemoStore_Id(contextStoreId)
+                .map(DemoStoreMapping::getAccessSourceStore)
+                .filter(s -> s != null)
+                .map(Store::getId)
+                .orElse(contextStoreId);
+    }
+
     public record KpiDataContext(Long dataStoreId, double revenueQuantityMultiplier) {}
 }

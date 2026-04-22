@@ -17,8 +17,13 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Sync daily sales (SalesProduct) into stock consumption movements.
@@ -69,13 +74,41 @@ public class StockSalesSyncService {
             return 0;
         }
 
+        List<Long> salesIds = sales.stream()
+                .filter(Objects::nonNull)
+                .map(SalesProduct::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Set<Long> alreadySynced = salesIds.isEmpty()
+                ? Set.of()
+                : new HashSet<>(stockMovementRepository.findReferenceIdsByReferenceTypeAndReferenceIdIn(
+                        REFERENCE_TYPE_ARTICLE_SALE, salesIds));
+
+        Set<String> nameKeys = sales.stream()
+                .filter(sp -> sp != null && sp.getId() != null && sp.getProduct() != null && !alreadySynced.contains(sp.getId()))
+                .map(sp -> sp.getProduct().getName())
+                .filter(n -> n != null && !n.isBlank())
+                .map(n -> n.trim().toLowerCase())
+                .collect(Collectors.toSet());
+
+        Map<String, Article> articleByLowerName = new HashMap<>();
+        if (!nameKeys.isEmpty()) {
+            for (Article a : articleRepository.findByStoreIdAndNameLowerTrimmedIn(dataStoreId, nameKeys)) {
+                if (a.getName() == null) {
+                    continue;
+                }
+                String key = a.getName().trim().toLowerCase();
+                articleByLowerName.putIfAbsent(key, a);
+            }
+        }
+
         int processed = 0;
         for (SalesProduct sp : sales) {
             if (sp == null || sp.getId() == null || sp.getProduct() == null) {
                 continue;
             }
-            // Skip if we already created ARTICLE_SALE movements for this sales_product
-            if (stockMovementRepository.existsByReferenceTypeAndReferenceId(REFERENCE_TYPE_ARTICLE_SALE, sp.getId())) {
+            if (alreadySynced.contains(sp.getId())) {
                 continue;
             }
 
@@ -84,13 +117,11 @@ public class StockSalesSyncService {
                 continue;
             }
 
-            Optional<Article> articleOpt =
-                    articleRepository.findFirstByStoreIdAndNameIgnoreCase(dataStoreId, productName.trim());
-            if (articleOpt.isEmpty()) {
+            Article article = articleByLowerName.get(productName.trim().toLowerCase());
+            if (article == null) {
                 log.warn("No Article found for SalesProduct id={} name='{}' dataStoreId={}", sp.getId(), productName, dataStoreId);
                 continue;
             }
-            Article article = articleOpt.get();
 
             Integer qtyInt = sp.getQuantity();
             if (qtyInt == null || qtyInt <= 0) {

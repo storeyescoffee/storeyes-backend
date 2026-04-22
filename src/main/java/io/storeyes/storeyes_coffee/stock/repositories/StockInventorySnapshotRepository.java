@@ -28,6 +28,6 @@ public interface StockInventorySnapshotRepository extends JpaRepository<StockInv
     );
 
     /** All snapshots for store, newest first (service will take latest per product). */
-    @Query("SELECT s FROM StockInventorySnapshot s JOIN s.session ses WHERE ses.store.id = :storeId ORDER BY s.createdAt DESC")
+    @Query("SELECT DISTINCT s FROM StockInventorySnapshot s JOIN FETCH s.product p JOIN FETCH p.subCategory JOIN s.session ses WHERE ses.store.id = :storeId ORDER BY s.createdAt DESC")
     List<StockInventorySnapshot> findBySessionStoreIdOrderByCreatedAtDesc(@Param("storeId") Long storeId);
 }
