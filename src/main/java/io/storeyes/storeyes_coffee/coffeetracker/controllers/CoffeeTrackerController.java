@@ -1,12 +1,15 @@
 package io.storeyes.storeyes_coffee.coffeetracker.controllers;
 
-import io.storeyes.storeyes_coffee.coffeetracker.dto.CoffeeTrackerEventDTO;
+import io.storeyes.storeyes_coffee.coffeetracker.entities.CoffeeTracker;
 import io.storeyes.storeyes_coffee.coffeetracker.services.CoffeeTrackerService;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,19 +22,17 @@ public class CoffeeTrackerController {
     private final CoffeeTrackerService coffeeTrackerService;
 
     /**
-     * Get COMPLETED state events for the current user's store on the given date.
-     * GET /api/coffee-tracker/completed?date=YYYY-MM-DD
+     * Completed coffee trackers for the current user's store on a given calendar day
+     * (by {@code DATE(timestamp)} semantics). Store comes from {@link CurrentStoreContext}.
+     * GET /api/coffee-tracker?date={yyyy-MM-dd}
      */
-    @GetMapping("/completed")
-    public ResponseEntity<List<CoffeeTrackerEventDTO>> getCompletedEvents(
+    @GetMapping
+    public ResponseEntity<List<CoffeeTracker>> getCompletedByStoreAndDate(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-
         Long storeId = CurrentStoreContext.getCurrentStoreId();
         if (storeId == null) {
             throw new RuntimeException("Store context not found for current user");
         }
-
-        List<CoffeeTrackerEventDTO> events = coffeeTrackerService.getCompletedEventsByStoreAndDate(storeId, date);
-        return ResponseEntity.ok(events);
+        return ResponseEntity.ok(coffeeTrackerService.findCompletedByStoreAndDate(storeId, date));
     }
 }

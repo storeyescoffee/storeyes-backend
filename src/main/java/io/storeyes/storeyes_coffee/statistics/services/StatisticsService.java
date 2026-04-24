@@ -132,6 +132,22 @@ public class StatisticsService {
     }
 
     /**
+     * Month profit in MAD for {@code monthKey} ({@code yyyy-MM}), identical to
+     * {@link #getStatistics(String, String)} KPI profit for {@code period=month}.
+     */
+    public BigDecimal getMonthProfitMad(String monthKey) {
+        StatisticsStoreContext ctx = resolveStatisticsStores();
+        YearMonth yearMonth = YearMonth.parse(monthKey, MONTH_FORMATTER);
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+        BigDecimal revenue = getRevenueForPeriod(ctx, startDate, endDate);
+        BigDecimal fixedChargesTotal = getFixedChargesForPeriod(ctx, "month", monthKey);
+        BigDecimal variableChargesTotal = getVariableChargesForPeriod(ctx, startDate, endDate);
+        BigDecimal totalCharges = fixedChargesTotal.add(variableChargesTotal);
+        return revenue.subtract(totalCharges).setScale(SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
      * Get detailed charges breakdown
      */
     public ChargesDetailResponse getChargesDetail(String period, String month, String week) {

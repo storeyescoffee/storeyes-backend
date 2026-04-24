@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -48,6 +49,21 @@ public class KpiService {
             return 0;
         }
         return (int) Math.round(quantity * mult);
+    }
+
+    /**
+     * Total revenue TTC for one calendar day (scaled like {@link #getDailyReport(Long, LocalDate)}).
+     * Empty when {@code date} is not present in the date dimension (same gate as GET /api/kpi/daily-report).
+     */
+    public Optional<Double> getDailyRevenueTtcForDate(Long storeId, LocalDate date) {
+        if (dateDimensionRepository.findByDate(date).isEmpty()) {
+            return Optional.empty();
+        }
+        DemoStoreDataSourceResolver.KpiDataContext kpiCtx = demoStoreDataSourceResolver.resolveKpiContext(storeId);
+        Long dataStoreId = kpiCtx.dataStoreId();
+        double mult = kpiCtx.revenueQuantityMultiplier();
+        Optional<Double> raw = factKpiDailyRepository.findTotalRevenueTtcByStoreIdAndCalendarDate(dataStoreId, date);
+        return Optional.of(scaledRevenue(raw.orElse(null), mult));
     }
     
     /**
