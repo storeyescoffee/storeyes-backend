@@ -108,7 +108,10 @@ public class PasswordResetService {
     @Transactional
     public boolean complete(String email, String code, String newPassword, String resetToken) {
         if (!keycloakPasswordAdminService.isEnabled()) {
-            throw new IllegalStateException("Keycloak admin API is not configured");
+            throw new IllegalStateException(
+                    keycloakPasswordAdminService
+                            .notReadyReason()
+                            .orElse("Keycloak admin API is not configured"));
         }
         String normalized = normalizeEmail(email);
         Optional<PasswordResetChallenge> opt = challengeRepository
@@ -140,7 +143,11 @@ public class PasswordResetService {
         try {
             keycloakPasswordAdminService.resetPassword(keycloakUserId, newPassword);
         } catch (HttpClientErrorException e) {
-            log.warn("Keycloak password reset failed for user {}: {}", keycloakUserId, e.getStatusCode());
+            log.warn(
+                    "Keycloak HTTP {} for user {} (token or reset-password): {}",
+                    e.getStatusCode(),
+                    keycloakUserId,
+                    e.getResponseBodyAsString());
             throw e;
         }
         c.setConsumedAt(Instant.now());

@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/auth/password-reset")
@@ -30,6 +32,18 @@ public class PasswordResetController {
             "If an account exists for this email, a verification code was sent.";
 
     private final PasswordResetService passwordResetService;
+
+    private static final Pattern KC_ERROR_DESC =
+            Pattern.compile("\"error_description\"\\s*:\\s*\"([^\"]*)\"");
+
+    /** Best-effort parse of Keycloak token / admin JSON error body for client-visible hint. */
+    private static String extractKeycloakErrorDescription(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        Matcher m = KC_ERROR_DESC.matcher(json);
+        return m.find() ? m.group(1).replace("\\\"", "\"") : null;
+    }
 
     @PostMapping("/request")
     public ResponseEntity<PasswordResetAckResponse> request(@Valid @RequestBody PasswordResetRequestBody body) {
@@ -67,9 +81,14 @@ public class PasswordResetController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(new AuthErrorResponse("not_configured", e.getMessage()));
         } catch (HttpClientErrorException e) {
-            log.warn("Keycloak error during password reset: {}", e.getStatusCode());
+            log.warn(
+                    "Keycloak error during password reset: {} — {}",
+                    e.getStatusCode(),
+                    e.getResponseBodyAsString());
+            String hint = extractKeycloakErrorDescription(e.getResponseBodyAsString());
+            String description = hint != null ? hint : "Could not update password";
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                    .body(new AuthErrorResponse("keycloak_error", "Could not update password"));
+                    .body(new AuthErrorResponse("keycloak_error", description));
         }
     }
 }

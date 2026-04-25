@@ -1,0 +1,9 @@
+﻿spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://x/realms/r
+          jwk-set-uri: http://x/jwks
+          audience: c
+          client-secret: secret

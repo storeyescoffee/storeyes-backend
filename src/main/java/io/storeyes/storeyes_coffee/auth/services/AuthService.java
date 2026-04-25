@@ -6,6 +6,7 @@ import io.storeyes.storeyes_coffee.auth.dto.AuthResponse;
 import io.storeyes.storeyes_coffee.auth.dto.UserInfoDTO;
 import io.storeyes.storeyes_coffee.auth.entities.UserInfo;
 import io.storeyes.storeyes_coffee.auth.exceptions.TokenRefreshException;
+import io.storeyes.storeyes_coffee.auth.config.KeycloakAdminProperties;
 import io.storeyes.storeyes_coffee.auth.repositories.UserInfoRepository;
 import io.storeyes.storeyes_coffee.rolemapping.repositories.RoleMappingRepository;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
@@ -17,6 +18,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
@@ -37,7 +39,8 @@ public class AuthService {
     private final RoleMappingRepository roleMappingRepository;
     private final JwtDecoder jwtDecoder;
     private final ObjectMapper objectMapper;
-    
+    private final KeycloakAdminProperties keycloakAdminProperties;
+
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
     private String keycloakIssuerUri;
     
@@ -51,13 +54,39 @@ public class AuthService {
     @Value("${spring.security.oauth2.resourceserver.jwt.audience}")
     private String clientId;
     
-    public AuthService(RestTemplate restTemplate, UserInfoRepository userInfoRepository,
-                       RoleMappingRepository roleMappingRepository, JwtDecoder jwtDecoder) {
+    public AuthService(
+            RestTemplate restTemplate,
+            UserInfoRepository userInfoRepository,
+            RoleMappingRepository roleMappingRepository,
+            JwtDecoder jwtDecoder,
+            KeycloakAdminProperties keycloakAdminProperties) {
         this.restTemplate = restTemplate;
         this.userInfoRepository = userInfoRepository;
         this.roleMappingRepository = roleMappingRepository;
         this.jwtDecoder = jwtDecoder;
+        this.keycloakAdminProperties = keycloakAdminProperties;
         this.objectMapper = new ObjectMapper();
+    }
+
+    /**
+     * OpenID client id for token/logout: {@code app.keycloak-admin.resource} (or legacy client-id) if set,
+     * else JWT {@code audience}.
+     */
+    private String resolvedClientId() {
+        if (StringUtils.hasText(keycloakAdminProperties.effectiveClientId())) {
+            return keycloakAdminProperties.effectiveClientId();
+        }
+        return clientId != null ? clientId.trim() : "";
+    }
+
+    private String resolvedClientSecret() {
+        return keycloakAdminProperties.effectiveClientSecret();
+    }
+
+    private void addClientSecretIfPresent(MultiValueMap<String, String> body) {
+        if (StringUtils.hasText(resolvedClientSecret())) {
+            body.add("client_secret", resolvedClientSecret());
+        }
     }
 
     /**
@@ -76,9 +105,11 @@ public class AuthService {
         
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "password");
-        body.add("client_id", clientId);
+        body.add("client_id", resolvedClientId());
+        addClientSecretIfPresent(body);
         body.add("username", username);
         body.add("password", password);
+        body.add("scope", "openid");
         
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
         
@@ -122,22 +153,24 @@ public class AuthService {
             throw new TokenRefreshException("invalid_request", "Refresh token is required");
         }
         
-        if (clientId == null || clientId.isEmpty()) {
+        String effectiveClientId = resolvedClientId();
+        if (!StringUtils.hasText(effectiveClientId)) {
             throw new TokenRefreshException("server_error", "Client ID is not configured");
         }
-        
+
         String tokenEndpoint = keycloakIssuerUri + "/protocol/openid-connect/token";
-        
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        
+
         // Build request body with all required parameters
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "refresh_token");
-        body.add("client_id", clientId); // CRITICAL: Must match the client used for login
+        body.add("client_id", effectiveClientId); // CRITICAL: Must match the client used for login
+        addClientSecretIfPresent(body);
         body.add("refresh_token", refreshToken);
-        
-        log.debug("Refreshing token with client_id: {}", clientId);
+
+        log.debug("Refreshing token with client_id: {}", effectiveClientId);
         log.debug("Token endpoint: {}", tokenEndpoint);
         
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
@@ -172,8 +205,11 @@ public class AuthService {
                 
         } catch (HttpClientErrorException e) {
             // Log the error for debugging
-            log.warn("Keycloak token refresh failed. Status: {}, Response: {}, Client ID: {}", 
-                e.getStatusCode(), e.getResponseBodyAsString(), clientId);
+            log.warn(
+                    "Keycloak token refresh failed. Status: {}, Response: {}, Client ID: {}",
+                    e.getStatusCode(),
+                    e.getResponseBodyAsString(),
+                    effectiveClientId);
             
             // Parse Keycloak error response to extract OAuth2 error information
             String error = "invalid_grant";
@@ -200,14 +236,16 @@ public class AuthService {
                         lowerResponseBody.contains("session does not have required client")) {
                         error = "invalid_request";
                         errorDescription = "Session doesn't have required client. Ensure client_id matches the client used for login.";
-                        log.error("Client ID mismatch detected! Used client_id: {}. This usually means the refresh token was issued for a different client.", clientId);
+                        log.error(
+                                "Client ID mismatch detected! Used client_id: {}. This usually means the refresh token was issued for a different client.",
+                                effectiveClientId);
                     } else if (lowerResponseBody.contains("token is not active") || 
                                lowerResponseBody.contains("invalid_grant")) {
                         error = "invalid_grant";
                         errorDescription = "Token is not active";
                     } else if (lowerResponseBody.contains("invalid client")) {
                         error = "invalid_client";
-                        errorDescription = "Invalid client ID: " + clientId;
+                        errorDescription = "Invalid client ID: " + effectiveClientId;
                     } else {
                         errorDescription = responseBody;
                     }
@@ -260,7 +298,8 @@ public class AuthService {
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("client_id", clientId);
+        body.add("client_id", resolvedClientId());
+        addClientSecretIfPresent(body);
         body.add("refresh_token", refreshToken);
         
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
@@ -271,7 +310,7 @@ public class AuthService {
             // Log the error but don't fail logout if Keycloak revocation fails
             // The token will expire anyway, and the client will clear local storage
             // This is a best-effort revocation
-            System.err.println("Failed to revoke token in Keycloak: " + e.getResponseBodyAsString());
+            log.warn("Failed to revoke token in Keycloak: {}", e.getResponseBodyAsString());
         }
     }
 
