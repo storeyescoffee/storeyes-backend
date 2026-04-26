@@ -274,14 +274,16 @@ public class StatisticsService {
             List<FixedChargeWithAmount> result = new ArrayList<>();
             List<FixedCharge> monthCharges = fixedChargeRepository.findByStoreIdAndMonthKey(chargesStoreId, monthKey);
             for (FixedCharge c : monthCharges) {
-                if (c.getPeriod() == ChargePeriod.MONTH) {
+                if (c.getPeriod() == ChargePeriod.MONTH && c.getCategory() == ChargeCategory.PERSONNEL) {
                     BigDecimal effective = c.getAmount().divide(BigDecimal.valueOf(weeksCount), SCALE, RoundingMode.HALF_UP);
                     result.add(new FixedChargeWithAmount(c, effective));
                 }
             }
             List<FixedCharge> weekCharges = fixedChargeRepository.findByStoreIdAndMonthKeyAndWeekKey(chargesStoreId, monthKey, mondayWeekKey);
             for (FixedCharge c : weekCharges) {
-                result.add(new FixedChargeWithAmount(c, c.getAmount()));
+                if (c.getCategory() == ChargeCategory.PERSONNEL) {
+                    result.add(new FixedChargeWithAmount(c, c.getAmount()));
+                }
             }
             return result;
         } else {

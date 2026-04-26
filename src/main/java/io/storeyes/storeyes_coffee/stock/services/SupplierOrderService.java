@@ -19,6 +19,7 @@ import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -65,7 +66,7 @@ public class SupplierOrderService {
 
     private SupplierOrderSummaryResponse mapSummaryRow(Object[] row) {
         Long id = ((Number) row[0]).longValue();
-        SupplierOrderStatus status = SupplierOrderStatus.valueOf(String.valueOf(row[1]));
+        SupplierOrderStatus status = normalizeStatus(parseStatus(String.valueOf(row[1])));
         LocalDate orderDate = toLocalDate(row[2]);
         Long supplierId = row[3] == null ? null : ((Number) row[3]).longValue();
         String supplierName = row[4] != null ? row[4].toString() : null;
@@ -84,6 +85,28 @@ public class SupplierOrderService {
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .build();
+    }
+
+    private SupplierOrderStatus parseStatus(String rawStatus) {
+        if (rawStatus == null) {
+            return SupplierOrderStatus.PENDING;
+        }
+        try {
+            return SupplierOrderStatus.valueOf(rawStatus);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid supplier order status in database: " + rawStatus);
+        }
+    }
+
+    private SupplierOrderStatus normalizeStatus(SupplierOrderStatus status) {
+        if (status == null) {
+            return SupplierOrderStatus.PENDING;
+        }
+        return switch (status) {
+            case DRAFT -> SupplierOrderStatus.PENDING;
+            case SENT, CONVERTED -> SupplierOrderStatus.VALID;
+            default -> status;
+        };
     }
 
     private static LocalDate toLocalDate(Object v) {
@@ -146,7 +169,19 @@ public class SupplierOrderService {
 
         List<SupplierOrderLine> lines = buildLines(order, storeId, request.getLines());
         order.setLines(lines);
-        SupplierOrder saved = supplierOrderRepository.save(order);
+        SupplierOrder saved;
+        try {
+            saved = supplierOrderRepository.save(order);
+        } catch (DataIntegrityViolationException ex) {
+            // Backward compatibility for environments where DB status constraint/enum
+            // still only allows legacy values.
+            order.setStatus(SupplierOrderStatus.DRAFT);
+            try {
+                saved = supplierOrderRepository.save(order);
+            } catch (DataIntegrityViolationException ex2) {
+                throw new IllegalStateException("Supplier order status migration is missing. Please apply DB migration V19.", ex2);
+            }
+        }
         return toDetailResponse(supplierOrderRepository.findFetchedByIdAndStoreId(saved.getId(), storeId).orElse(saved));
     }
 
@@ -158,6 +193,7 @@ public class SupplierOrderService {
         if (order.getConvertedAt() != null) {
             throw new IllegalArgumentException("Cannot update a converted supplier order");
         }
+        order.setStatus(normalizeStatus(order.getStatus()));
 
         if (request.getOrderDate() != null) {
             order.setOrderDate(request.getOrderDate());
@@ -207,11 +243,28 @@ public class SupplierOrderService {
         if (order.getConvertedAt() != null) {
             throw new IllegalArgumentException("Cannot change status of a converted supplier order");
         }
+        order.setStatus(normalizeStatus(order.getStatus()));
         if (targetStatus == SupplierOrderStatus.PENDING) {
             throw new IllegalArgumentException("Invalid status transition");
         }
         order.setStatus(targetStatus);
-        SupplierOrder saved = supplierOrderRepository.save(order);
+        SupplierOrder saved;
+        try {
+            saved = supplierOrderRepository.save(order);
+        } catch (DataIntegrityViolationException ex) {
+            // VALID can fallback to legacy SENT for old DB enum/constraint.
+            if (targetStatus == SupplierOrderStatus.VALID) {
+                order.setStatus(SupplierOrderStatus.SENT);
+                try {
+                    saved = supplierOrderRepository.save(order);
+                } catch (DataIntegrityViolationException ex2) {
+                    throw new IllegalStateException("Supplier order status migration is missing. Please apply DB migration V19.", ex2);
+                }
+            } else {
+                // REJECTED has no legacy equivalent; migration is mandatory.
+                throw new IllegalStateException("Supplier order status migration is missing. Please apply DB migration V19.", ex);
+            }
+        }
         return toDetailResponse(supplierOrderRepository.findFetchedByIdAndStoreId(saved.getId(), storeId).orElse(saved));
     }
 
@@ -341,7 +394,7 @@ public class SupplierOrderService {
 
         return SupplierOrderDetailResponse.builder()
                 .id(order.getId())
-                .status(order.getStatus())
+                .status(normalizeStatus(order.getStatus()))
                 .orderDate(order.getOrderDate())
                 .supplierId(supplierId)
                 .supplierName(supplierName)
