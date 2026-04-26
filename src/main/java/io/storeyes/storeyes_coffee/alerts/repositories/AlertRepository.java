@@ -2,12 +2,13 @@ package io.storeyes.storeyes_coffee.alerts.repositories;
 
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
 import io.storeyes.storeyes_coffee.alerts.entities.AlertType;
+import io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -131,5 +132,17 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
         String imageUrl,
         LocalDateTime updatedAt
     );
+
+    /**
+     * Count of processed alerts for a store on a calendar day ({@code DATE(alert_date) = DATE(:dayStart)}),
+     * with human judgements shown on the default alerts list ({@code NEW}, {@code TRUE_POSITIVE}).
+     */
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.isProcessed = true AND a.store.id = :storeId "
+            + "AND DATE(a.alertDate) = DATE(:dayStart) "
+            + "AND a.humanJudgement IN :judgements")
+    long countProcessedHomeAlertsByDay(
+            @Param("storeId") Long storeId,
+            @Param("dayStart") LocalDateTime dayStart,
+            @Param("judgements") List<HumanJudgement> judgements);
 }
 

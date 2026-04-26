@@ -38,6 +38,7 @@ public class VariableChargeMainCategory {
     @Column(name = "code", length = 50)
     private String code;
 
+    @Builder.Default
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
 

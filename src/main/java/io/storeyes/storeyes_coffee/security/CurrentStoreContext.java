@@ -32,4 +32,16 @@ public final class CurrentStoreContext {
         Object value = request.getAttribute(REQUEST_ATTR_STORE_ID);
         return value instanceof Long ? (Long) value : null;
     }
+
+    /**
+     * Same as {@link #getCurrentStoreId()} but throws if the interceptor did not set a store
+     * (e.g. user not authenticated or no role mapping).
+     */
+    public static long requireCurrentStoreId() {
+        Long storeId = getCurrentStoreId();
+        if (storeId == null) {
+            throw new RuntimeException("Store context not found for current user");
+        }
+        return storeId;
+    }
 }

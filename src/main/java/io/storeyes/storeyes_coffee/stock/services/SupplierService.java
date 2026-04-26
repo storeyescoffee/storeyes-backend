@@ -1,6 +1,6 @@
 package io.storeyes.storeyes_coffee.stock.services;
 
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.dto.*;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.stock.entities.Supplier;
@@ -10,7 +10,6 @@ import io.storeyes.storeyes_coffee.stock.repositories.SupplierRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.SupplierStockProductRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
-import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,14 +25,9 @@ public class SupplierService {
     private final SupplierStockProductRepository supplierStockProductRepository;
     private final StockProductRepository stockProductRepository;
     private final StoreRepository storeRepository;
-    private final StoreService storeService;
 
     private Long getStoreId() {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
-        return storeService.getStoreByOwnerId(userId).getId();
+        return CurrentStoreContext.requireCurrentStoreId();
     }
 
     /**

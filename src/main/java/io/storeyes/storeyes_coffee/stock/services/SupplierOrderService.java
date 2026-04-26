@@ -4,7 +4,7 @@ import io.storeyes.storeyes_coffee.charges.dto.VariableChargeCreateRequest;
 import io.storeyes.storeyes_coffee.charges.entities.VariableChargeMainCategory;
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeMainCategoryRepository;
 import io.storeyes.storeyes_coffee.charges.services.ChargeService;
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.dto.*;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.stock.entities.Supplier;
@@ -16,7 +16,6 @@ import io.storeyes.storeyes_coffee.stock.repositories.SupplierOrderRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.SupplierRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
-import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -40,18 +39,13 @@ public class SupplierOrderService {
 
     private final SupplierOrderRepository supplierOrderRepository;
     private final StoreRepository storeRepository;
-    private final StoreService storeService;
     private final SupplierRepository supplierRepository;
     private final StockProductRepository stockProductRepository;
     private final VariableChargeMainCategoryRepository variableChargeMainCategoryRepository;
     private final ChargeService chargeService;
 
     private Long getStoreId() {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new IllegalStateException("User is not authenticated");
-        }
-        return storeService.getStoreByOwnerId(userId).getId();
+        return CurrentStoreContext.requireCurrentStoreId();
     }
 
     public List<SupplierOrderSummaryResponse> listSummaries() {

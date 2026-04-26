@@ -2,14 +2,13 @@ package io.storeyes.storeyes_coffee.stock.services;
 
 import io.storeyes.storeyes_coffee.product.entities.SalesProduct;
 import io.storeyes.storeyes_coffee.product.repositories.SalesProductRepository;
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.entities.Article;
 import io.storeyes.storeyes_coffee.stock.repositories.ArticleRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockMovementRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
-import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,16 +44,11 @@ public class StockSalesSyncService {
     private final ArticleRepository articleRepository;
     private final StockMovementRepository stockMovementRepository;
     private final StockConsumptionService stockConsumptionService;
-    private final StoreService storeService;
     private final StoreRepository storeRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreIdFromContext() {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
-        return storeService.getStoreByOwnerId(userId).getId();
+        return CurrentStoreContext.requireCurrentStoreId();
     }
 
     /**

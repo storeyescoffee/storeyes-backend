@@ -51,8 +51,10 @@ public interface SupplierStockProductRepository extends JpaRepository<SupplierSt
             SELECT l FROM SupplierStockProduct l
             JOIN FETCH l.supplier s
             JOIN FETCH l.stockProduct p
-            WHERE p.id IN :productIds AND s.isActive = true
+            WHERE p.id IN :productIds AND s.store.id = :storeId AND s.isActive = true
             ORDER BY p.id ASC, s.name ASC
             """)
-    List<SupplierStockProduct> findByStockProduct_IdInWithSupplier(@Param("productIds") Collection<Long> productIds);
+    List<SupplierStockProduct> findByStoreIdAndStockProduct_IdInWithSupplier(
+            @Param("storeId") Long storeId,
+            @Param("productIds") Collection<Long> productIds);
 }

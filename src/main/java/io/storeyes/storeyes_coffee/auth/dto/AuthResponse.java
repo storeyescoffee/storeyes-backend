@@ -21,7 +21,7 @@ public class AuthResponse {
     
     /** Store code from the user's role mapping. Null if user has no store. */
     private String storeCode;
-    /** Role name (e.g. OWNER). Null if user has no store. */
+    /** Role name from the user's store role mapping. Null if user has no store. */
     private String role;
 }
 

@@ -1,7 +1,7 @@
 package io.storeyes.storeyes_coffee.stock.services;
 
 import io.storeyes.storeyes_coffee.charges.entities.VariableCharge;
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.dto.ManualConsumptionRequest;
 import io.storeyes.storeyes_coffee.stock.dto.SetStockRequest;
 import io.storeyes.storeyes_coffee.stock.dto.SupplementStockItemRequest;
@@ -9,6 +9,7 @@ import io.storeyes.storeyes_coffee.stock.dto.ValidateInventoryItemRequest;
 import io.storeyes.storeyes_coffee.stock.dto.ValidateInventoryRequest;
 import io.storeyes.storeyes_coffee.stock.dto.StockInventoryItemResponse;
 import io.storeyes.storeyes_coffee.stock.dto.StockProductSupplierBrief;
+import io.storeyes.storeyes_coffee.stock.dto.StockSummaryResponse;
 import io.storeyes.storeyes_coffee.stock.dto.StockToBuyItemResponse;
 import io.storeyes.storeyes_coffee.stock.entities.StockMovement;
 import io.storeyes.storeyes_coffee.stock.entities.StockMovementType;
@@ -41,6 +42,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -54,6 +56,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class StockMovementService {
+
+    private static final BigDecimal INVENTORY_DIFF_EPSILON = new BigDecimal("0.01");
 
     private static final String REFERENCE_TYPE_VARIABLE_CHARGE = "VARIABLE_CHARGE";
 
@@ -69,11 +73,7 @@ public class StockMovementService {
     private EntityManager entityManager;
 
     private Long getStoreId() {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
-        return storeService.getStoreByOwnerId(userId).getId();
+        return CurrentStoreContext.requireCurrentStoreId();
     }
 
     /** Stock rows and movements for the context store, or the mapped source when the store is a demo. */
@@ -81,12 +81,13 @@ public class StockMovementService {
         return demoStoreDataSourceResolver.resolveStockDataStoreId(getStoreId());
     }
 
-    private Map<Long, List<StockProductSupplierBrief>> loadSuppliersByProductId(Collection<Long> productIds) {
+    private Map<Long, List<StockProductSupplierBrief>> loadSuppliersByProductId(
+            Long storeId, Collection<Long> productIds) {
         if (productIds == null || productIds.isEmpty()) {
             return Map.of();
         }
         List<SupplierStockProduct> links =
-                supplierStockProductRepository.findByStockProduct_IdInWithSupplier(productIds);
+                supplierStockProductRepository.findByStoreIdAndStockProduct_IdInWithSupplier(storeId, productIds);
         Map<Long, List<StockProductSupplierBrief>> map = new HashMap<>();
         for (SupplierStockProduct l : links) {
             Long pid = l.getStockProduct().getId();
@@ -274,21 +275,18 @@ public class StockMovementService {
      */
     public List<StockInventoryItemResponse> getInventorySummary() {
         Long storeId = getStockDataStoreId();
-        List<StockProduct> allProducts = stockProductRepository.findByStoreIdWithSubCategoryOrderByNameAsc(storeId).stream()
-                .filter(p -> {
-                    if (p.getSubCategory() == null || p.getSubCategory().getCode() == null) return false;
-                    String code = p.getSubCategory().getCode().toLowerCase();
-                    return "bar".equals(code) || "kitchen".equals(code) || "freezer".equals(code) || "soda".equals(code);
-                })
-                .toList();
+        List<StockProduct> allProducts = stockProductRepository.findRawMaterialProductsByStoreIdOrderByNameAsc(storeId);
         List<Object[]> estimatedRows = stockMovementRepository.getEstimatedSummaryByStore(storeId);
         Map<Long, Object[]> estimatedByProductId = estimatedRows.stream()
                 .collect(Collectors.toMap(r -> ((Number) r[0]).longValue(), r -> r));
 
-        List<StockInventorySnapshot> allSnapshots = stockInventorySnapshotRepository.findBySessionStoreIdOrderByCreatedAtDesc(storeId);
+        List<Long> latestSnapshotIds = stockInventorySnapshotRepository.findLatestSnapshotIdsByStoreId(storeId);
+        List<StockInventorySnapshot> latestSnapshots = latestSnapshotIds.isEmpty()
+                ? List.of()
+                : stockInventorySnapshotRepository.findByIdInWithProductAndSubCategory(latestSnapshotIds);
         Map<Long, StockInventorySnapshot> latestSnapshotByProductId = new LinkedHashMap<>();
-        for (StockInventorySnapshot s : allSnapshots) {
-            latestSnapshotByProductId.putIfAbsent(s.getProduct().getId(), s);
+        for (StockInventorySnapshot s : latestSnapshots) {
+            latestSnapshotByProductId.put(s.getProduct().getId(), s);
         }
 
         Map<Long, LocalDateTime> cutoffByProduct = new HashMap<>();
@@ -298,7 +296,7 @@ public class StockMovementService {
         Map<Long, BigDecimal[]> driftByProduct = loadRealDriftAfterCutoffs(storeId, cutoffByProduct);
 
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId =
-                loadSuppliersByProductId(allProducts.stream().map(StockProduct::getId).toList());
+                loadSuppliersByProductId(storeId, allProducts.stream().map(StockProduct::getId).toList());
 
         return allProducts.stream()
                 .map(product -> {
@@ -396,12 +394,7 @@ public class StockMovementService {
         List<StockInventoryItemResponse> inventory = getInventorySummary();
         BigDecimal zero = BigDecimal.ZERO;
         return inventory.stream()
-                .filter(item -> {
-                    BigDecimal current = item.getEstimatedQuantity() != null ? item.getEstimatedQuantity() : zero;
-                    BigDecimal threshold = item.getMinimalThreshold() != null ? item.getMinimalThreshold() : zero;
-                    return (threshold.compareTo(zero) > 0 && current.compareTo(threshold) <= 0)
-                            || (threshold.compareTo(zero) <= 0 && current.compareTo(zero) == 0);
-                })
+                .filter(this::isToBuyLine)
                 .map(item -> {
                     BigDecimal currentQty = item.getEstimatedQuantity() != null ? item.getEstimatedQuantity() : zero;
                     BigDecimal currentCounting = item.getEstimatedQuantityCounting() != null
@@ -434,6 +427,57 @@ public class StockMovementService {
                     return cat != 0 ? cat : String.valueOf(a.getProductName()).compareTo(String.valueOf(b.getProductName()));
                 })
                 .toList();
+    }
+
+    /**
+     * Stock hub: total value (realValue ?? estimatedValue per line), quantity mismatch count, to-buy count.
+     * Uses one {@link #getInventorySummary()} pass — same rules as the full inventory and to-buy list endpoints.
+     */
+    public StockSummaryResponse getStockHubSummary() {
+        List<StockInventoryItemResponse> inventory = getInventorySummary();
+        BigDecimal totalValue = BigDecimal.ZERO;
+        long diffCount = 0;
+        long toBuy = 0;
+        for (StockInventoryItemResponse item : inventory) {
+            totalValue = totalValue.add(hubLineValue(item));
+            if (hasHubInventoryQuantityDiff(item)) {
+                diffCount++;
+            }
+            if (isToBuyLine(item)) {
+                toBuy++;
+            }
+        }
+        return StockSummaryResponse.builder()
+                .totalStockValue(totalValue.setScale(2, RoundingMode.HALF_UP))
+                .inventoryDiffCount(diffCount)
+                .toBuyCount(toBuy)
+                .generatedAt(OffsetDateTime.now())
+                .build();
+    }
+
+    private static BigDecimal hubLineValue(StockInventoryItemResponse item) {
+        if (item.getRealValue() != null) {
+            return item.getRealValue();
+        }
+        if (item.getEstimatedValue() != null) {
+            return item.getEstimatedValue();
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private static boolean hasHubInventoryQuantityDiff(StockInventoryItemResponse item) {
+        if (item.getRealQuantity() == null || item.getEstimatedQuantity() == null) {
+            return false;
+        }
+        return item.getRealQuantity().subtract(item.getEstimatedQuantity()).abs().compareTo(INVENTORY_DIFF_EPSILON) > 0;
+    }
+
+    private boolean isToBuyLine(StockInventoryItemResponse item) {
+        BigDecimal zero = BigDecimal.ZERO;
+        BigDecimal current = item.getEstimatedQuantity() != null ? item.getEstimatedQuantity() : zero;
+        BigDecimal threshold = item.getMinimalThreshold() != null ? item.getMinimalThreshold() : zero;
+        return (threshold.compareTo(zero) > 0 && current.compareTo(threshold) <= 0)
+                || (threshold.compareTo(zero) <= 0 && current.compareTo(zero) == 0);
     }
 
     /**

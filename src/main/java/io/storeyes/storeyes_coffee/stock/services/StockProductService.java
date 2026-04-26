@@ -2,7 +2,7 @@ package io.storeyes.storeyes_coffee.stock.services;
 
 import io.storeyes.storeyes_coffee.charges.entities.VariableChargeSubCategory;
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeSubCategoryRepository;
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.dto.CreateStockProductRequest;
 import io.storeyes.storeyes_coffee.stock.dto.StockProductResponse;
 import io.storeyes.storeyes_coffee.stock.dto.StockProductSupplierBrief;
@@ -15,7 +15,6 @@ import io.storeyes.storeyes_coffee.stock.repositories.SupplierStockProductReposi
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
-import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,17 +34,12 @@ public class StockProductService {
     private final StockProductRepository stockProductRepository;
     private final VariableChargeSubCategoryRepository variableChargeSubCategoryRepository;
     private final StoreRepository storeRepository;
-    private final StoreService storeService;
     private final SupplierStockProductRepository supplierStockProductRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreId() {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
-        return storeService.getStoreByOwnerId(userId).getId();
+        return CurrentStoreContext.requireCurrentStoreId();
     }
 
     /**
@@ -73,18 +67,19 @@ public class StockProductService {
             products = stockProductRepository.findByStoreIdOrderByNameAsc(dataStoreId);
         }
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId = loadSuppliersByProductId(
-                products.stream().map(StockProduct::getId).collect(Collectors.toList()));
+                dataStoreId, products.stream().map(StockProduct::getId).collect(Collectors.toList()));
         return products.stream()
                 .map(p -> toResponse(p, suppliersByProductId.getOrDefault(p.getId(), List.of())))
                 .collect(Collectors.toList());
     }
 
-    private Map<Long, List<StockProductSupplierBrief>> loadSuppliersByProductId(Collection<Long> productIds) {
+    private Map<Long, List<StockProductSupplierBrief>> loadSuppliersByProductId(
+            Long storeId, Collection<Long> productIds) {
         if (productIds == null || productIds.isEmpty()) {
             return Map.of();
         }
         List<SupplierStockProduct> links =
-                supplierStockProductRepository.findByStockProduct_IdInWithSupplier(productIds);
+                supplierStockProductRepository.findByStoreIdAndStockProduct_IdInWithSupplier(storeId, productIds);
         Map<Long, List<StockProductSupplierBrief>> map = new HashMap<>();
         for (SupplierStockProduct l : links) {
             Long pid = l.getStockProduct().getId();
@@ -119,7 +114,7 @@ public class StockProductService {
             throw new RuntimeException("Stock product not found with id: " + id);
         }
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId =
-                loadSuppliersByProductId(List.of(product.getId()));
+                loadSuppliersByProductId(dataStoreId, List.of(product.getId()));
         return toResponse(product, suppliersByProductId.getOrDefault(product.getId(), List.of()));
     }
 
@@ -205,7 +200,7 @@ public class StockProductService {
 
         StockProduct updated = stockProductRepository.save(product);
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId =
-                loadSuppliersByProductId(List.of(updated.getId()));
+                loadSuppliersByProductId(storeId, List.of(updated.getId()));
         return toResponse(updated, suppliersByProductId.getOrDefault(updated.getId(), List.of()));
     }
 

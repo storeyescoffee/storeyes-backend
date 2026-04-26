@@ -53,6 +53,7 @@ public class StockProduct {
     @Column(name = "unit_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal unitPrice;
 
+    @Builder.Default
     @Column(name = "minimal_threshold", nullable = false, precision = 12, scale = 2)
     private BigDecimal minimalThreshold = BigDecimal.ZERO;
 

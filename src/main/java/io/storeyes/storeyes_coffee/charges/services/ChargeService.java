@@ -60,15 +60,9 @@ public class ChargeService {
 
     // ==================== Fixed Charges ====================
 
-    /**
-     * Get store ID from store context (set by StoreContextInterceptor).
-     */
+    /** Store ID from {@link CurrentStoreContext} (set by {@link io.storeyes.storeyes_coffee.security.StoreContextInterceptor}). */
     private Long getContextStoreId() {
-        Long storeId = CurrentStoreContext.getCurrentStoreId();
-        if (storeId == null) {
-            throw new RuntimeException("Store context not found for current user");
-        }
-        return storeId;
+        return CurrentStoreContext.requireCurrentStoreId();
     }
 
     /** Store whose charge rows and FK graph are used (demo → mapped source when configured). */

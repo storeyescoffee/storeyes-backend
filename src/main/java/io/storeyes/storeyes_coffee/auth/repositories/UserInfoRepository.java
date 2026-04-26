@@ -14,4 +14,6 @@ public interface UserInfoRepository extends JpaRepository<UserInfo, String> {
      * Find user info by email
      */
     Optional<UserInfo> findByEmail(String email);
+
+    Optional<UserInfo> findByEmailIgnoreCase(String email);
 }

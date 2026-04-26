@@ -16,7 +16,7 @@ public interface RoleMappingRepository extends JpaRepository<RoleMapping, Long> 
     Optional<RoleMapping> findByUser_IdAndRole(String userId, Role role);
 
     /**
-     * Find role mapping by user ID and role name (e.g. OWNER).
+     * Find role mapping by user ID and role name.
      */
     Optional<RoleMapping> findByUser_IdAndRole_Name(String userId, String roleName);
 

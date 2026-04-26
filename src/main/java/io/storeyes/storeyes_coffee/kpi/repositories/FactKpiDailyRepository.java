@@ -35,5 +35,10 @@ public interface FactKpiDailyRepository extends JpaRepository<FactKpiDaily, Long
             @Param("storeId") Long storeId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT f.totalRevenueTtc FROM FactKpiDaily f JOIN f.date dd WHERE f.store.id = :storeId AND dd.date = :date")
+    Optional<Double> findTotalRevenueTtcByStoreIdAndCalendarDate(
+            @Param("storeId") Long storeId,
+            @Param("date") LocalDate date);
 }
 

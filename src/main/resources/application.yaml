@@ -37,6 +37,50 @@ spring:
           jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://15.216.37.183/realms/storeyes/protocol/openid-connect/certs}
           audience: ${KEYCLOAK_AUDIENCE:storeyes-mobile}
 
+  # Outbound email (Gmail). Do not put the app password here — use SPRING_MAIL_PASSWORD (env / IDE / server).
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: storeyes.morocco@gmail.com
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
+app:
+  password-reset:
+    pepper: ${PASSWORD_RESET_PEPPER:storeyes-dev-pepper-change-in-production}
+    code-ttl-minutes: ${PASSWORD_RESET_CODE_TTL_MINUTES:15}
+    reset-token-ttl-minutes: ${PASSWORD_RESET_TOKEN_TTL_MINUTES:30}
+    from-address: storeyes.morocco@gmail.com
+  # Keycloak Admin REST — required for POST /auth/password-reset/complete.
+  # client_credentials: realm + resource + credentials.secret below.
+  # password grant (admin-username/password): token is always /realms/master/... + client admin-cli unless
+  # password-grant-* below is set (override for non-default Keycloak layouts).
+  # Legacy keys client-id / client-secret / auth-realm / users-realm / server-url still work.
+  keycloak-admin:
+    enabled: ${KEYCLOAK_ADMIN_ENABLED:true}
+    require-client-secret-for-password-grant: ${KEYCLOAK_REQUIRE_SECRET_FOR_PASSWORD_GRANT:true}
+    auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:${KEYCLOAK_ADMIN_SERVER_URL:http://15.216.37.183}}
+    # Realm for client_credentials token only. If unset, issuer realm from jwt.issuer-uri.
+    realm: ${KEYCLOAK_REALM:${KEYCLOAK_ADMIN_AUTH_REALM:}}
+    # Optional overrides for password-grant token only (defaults: master + admin-cli in code).
+    password-grant-realm: ${KEYCLOAK_ADMIN_PASSWORD_GRANT_REALM:}
+    password-grant-client-id: ${KEYCLOAK_ADMIN_PASSWORD_GRANT_CLIENT_ID:}
+    password-grant-client-secret: ${KEYCLOAK_ADMIN_PASSWORD_GRANT_CLIENT_SECRET:}
+    user-management-realm: ${KEYCLOAK_USER_MANAGEMENT_REALM:${KEYCLOAK_ADMIN_USERS_REALM:storeyes}}
+    resource: ${KEYCLOAK_CLIENT_ID:${KEYCLOAK_ADMIN_CLIENT_ID:storeyes-mobile}}
+    credentials:
+      secret: s3RNQkg4DtQPRmAA1olMa3FBjvdEhNd5
+    admin-username: ${KEYCLOAK_ADMIN_USERNAME:msahtani}
+    admin-password: ${KEYCLOAK_ADMIN_PASSWORD:sahtouta@2025}
+
 logging:
   level:
     root: INFO

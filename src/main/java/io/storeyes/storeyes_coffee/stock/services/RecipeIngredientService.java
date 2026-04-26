@@ -1,6 +1,6 @@
 package io.storeyes.storeyes_coffee.stock.services;
 
-import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.dto.CreateRecipeIngredientRequest;
 import io.storeyes.storeyes_coffee.stock.dto.RecipeIngredientResponse;
 import io.storeyes.storeyes_coffee.stock.dto.UpdateRecipeIngredientRequest;
@@ -10,7 +10,6 @@ import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.stock.repositories.RecipeIngredientRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
 import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
-import io.storeyes.storeyes_coffee.store.services.StoreService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,15 +26,10 @@ public class RecipeIngredientService {
     private final RecipeIngredientRepository recipeIngredientRepository;
     private final StockProductRepository stockProductRepository;
     private final ArticleService articleService;
-    private final StoreService storeService;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreId() {
-        String userId = KeycloakTokenUtils.getUserId();
-        if (userId == null) {
-            throw new RuntimeException("User is not authenticated");
-        }
-        return storeService.getStoreByOwnerId(userId).getId();
+        return CurrentStoreContext.requireCurrentStoreId();
     }
 
     private Long getStockDataStoreId() {

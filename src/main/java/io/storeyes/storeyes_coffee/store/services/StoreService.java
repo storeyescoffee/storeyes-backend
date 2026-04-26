@@ -9,6 +9,7 @@ import io.storeyes.storeyes_coffee.store.entities.StoreStatus;
 import io.storeyes.storeyes_coffee.store.mappers.StoreMapper;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import io.storeyes.storeyes_coffee.store.specifications.StoreSpecification;
+import io.storeyes.storeyes_coffee.rolemapping.entities.RoleMapping;
 import io.storeyes.storeyes_coffee.rolemapping.repositories.RoleMappingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -78,19 +79,21 @@ public class StoreService {
     }
     
     /**
-     * Get store entity by user ID via RoleMapping (OWNER role).
+     * Store for the given Keycloak user — first {@link RoleMapping} for that user (any role).
      */
-    public Store getStoreEntityByOwnerId(String userId) {
-        return roleMappingRepository.findByUser_IdAndRole_Name(userId, "OWNER")
-                .map(rm -> rm.getStore())
-                .orElseThrow(() -> new RuntimeException("Store not found for user with id: " + userId));
+    public Store getStoreEntityForUser(String userId) {
+        return roleMappingRepository.findFirstByUser_Id(userId)
+                .map(RoleMapping::getStore)
+                .orElseThrow(() -> new RuntimeException("No store assigned for user with id: " + userId));
     }
 
     /**
-     * Get store by owner ID (Keycloak user ID) - resolves store via RoleMapping (OWNER role).
+     * Resolves store from role_mappings without using {@link io.storeyes.storeyes_coffee.security.CurrentStoreContext}.
+     * Prefer {@link io.storeyes.storeyes_coffee.security.CurrentStoreContext#requireCurrentStoreId()} in HTTP request code
+     * (set by {@link io.storeyes.storeyes_coffee.security.StoreContextInterceptor}); use this for jobs/tests with no request.
      */
-    public StoreDTO getStoreByOwnerId(String ownerId) {
-        return storeMapper.toDTO(getStoreEntityByOwnerId(ownerId));
+    public Long getStoreIdForUser(String userId) {
+        return getStoreEntityForUser(userId).getId();
     }
     
     /**

@@ -34,6 +34,7 @@ public class DocumentCategory {
     @Column(name = "description", columnDefinition = "text")
     private String description;
 
+    @Builder.Default
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
 
