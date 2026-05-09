@@ -15,7 +15,8 @@ public interface CoffeeTrackerRepository extends JpaRepository<CoffeeTracker, Lo
      * Completed trackers for a store whose {@code timestamp} falls on the given local calendar day.
      * Equivalent to {@code DATE(timestamp) = :date} in PostgreSQL for {@code timestamp without time zone}.
      */
-    @Query("SELECT c FROM CoffeeTracker c WHERE c.store.id = :storeId AND c.status = :status "
+    @Query("SELECT DISTINCT c FROM CoffeeTracker c LEFT JOIN FETCH c.details "
+            + "WHERE c.store.id = :storeId AND c.status = :status "
             + "AND c.timestamp >= :dayStart AND c.timestamp < :dayEnd ORDER BY c.timestamp ASC")
     List<CoffeeTracker> findByStoreIdAndStatusAndTimestampOnLocalDate(
             @Param("storeId") Long storeId,

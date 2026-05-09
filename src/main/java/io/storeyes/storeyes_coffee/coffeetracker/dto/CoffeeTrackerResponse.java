@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * API projection of {@link CoffeeTracker} without nested {@code store} (store is implied by auth context).
@@ -26,8 +28,12 @@ public class CoffeeTrackerResponse {
     private TrackerStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private List<TrackerCategoryDetailResponse> details;
 
     public static CoffeeTrackerResponse from(CoffeeTracker entity) {
+        List<TrackerCategoryDetailResponse> details = entity.getDetails() == null
+                ? Collections.emptyList()
+                : entity.getDetails().stream().map(TrackerCategoryDetailResponse::from).toList();
         return CoffeeTrackerResponse.builder()
                 .id(entity.getId())
                 .date(entity.getDate())
@@ -36,6 +42,7 @@ public class CoffeeTrackerResponse {
                 .status(entity.getStatus())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
+                .details(details)
                 .build();
     }
 }

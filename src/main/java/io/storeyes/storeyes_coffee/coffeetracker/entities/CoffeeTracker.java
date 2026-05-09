@@ -11,6 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import io.storeyes.storeyes_coffee.store.entities.Store;
 
@@ -57,6 +58,9 @@ public class CoffeeTracker {
 
     @Column(name = "status", nullable = false)
     private TrackerStatus status;
+
+    @OneToMany(mappedBy = "coffeeTracker", fetch = FetchType.LAZY)
+    private List<TrackerCategoryDetail> details;
 
     @Column(name = "created_at", nullable = false)
     @CreationTimestamp
