@@ -8,6 +8,8 @@ import io.storeyes.storeyes_coffee.charges.repositories.FixedChargeRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeRepository;
 import io.storeyes.storeyes_coffee.charges.utils.WeekCalculationUtils;
 import io.storeyes.storeyes_coffee.kpi.entities.FactKpiDaily;
+import io.storeyes.storeyes_coffee.kpi.entities.DailyRevenuePaymentBreakdown;
+import io.storeyes.storeyes_coffee.kpi.repositories.DailyRevenuePaymentBreakdownRepository;
 import io.storeyes.storeyes_coffee.kpi.repositories.FactKpiDailyRepository;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.statistics.dto.*;
@@ -32,8 +34,10 @@ public class StatisticsService {
      * For week period, monthly charges are prorated (amount / weeksInMonth); weekly charges are full amount.
      */
     private static record FixedChargeWithAmount(FixedCharge charge, BigDecimal effectiveAmount) {}
+    private static record ProfitPaymentBreakdown(BigDecimal tpe, BigDecimal cash) {}
 
     private final FactKpiDailyRepository factKpiDailyRepository;
+    private final DailyRevenuePaymentBreakdownRepository dailyRevenuePaymentBreakdownRepository;
     private final FixedChargeRepository fixedChargeRepository;
     private final VariableChargeRepository variableChargeRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
@@ -105,11 +109,14 @@ public class StatisticsService {
         BigDecimal profitPercentage = calculatePercentage(profit, revenue);
         String chargesStatus = calculateChargesStatus(chargesPercentage);
         String profitStatus = calculateProfitStatus(profitPercentage);
+        ProfitPaymentBreakdown profitBreakdown = getProfitPaymentBreakdownForPeriod(ctx, startDate, endDate, profit, revenue);
         
         KpiDTO kpi = KpiDTO.builder()
                 .revenue(revenue)
                 .charges(totalCharges)
                 .profit(profit)
+                .profitTpe(profitBreakdown.tpe())
+                .profitCash(profitBreakdown.cash())
                 .revenueEvolution(revenueEvolution)
                 .chargesPercentage(chargesPercentage)
                 .profitPercentage(profitPercentage)
@@ -232,6 +239,52 @@ public class StatisticsService {
                 .map(ttc -> ttc != null ? BigDecimal.valueOf(ttc).multiply(mult) : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return total.setScale(SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Split profit into TPE/Cash using payment mix over the selected period.
+     * TPE/Cash raw data are revenue payments; we project their ratio onto profit so:
+     * profit = profitTpe + profitCash.
+     */
+    private ProfitPaymentBreakdown getProfitPaymentBreakdownForPeriod(
+            StatisticsStoreContext ctx,
+            LocalDate startDate,
+            LocalDate endDate,
+            BigDecimal profit,
+            BigDecimal revenue
+    ) {
+        if (profit == null || profit.compareTo(BigDecimal.ZERO) <= 0
+                || revenue == null || revenue.compareTo(BigDecimal.ZERO) <= 0) {
+            return new ProfitPaymentBreakdown(BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+
+        BigDecimal multiplier = BigDecimal.valueOf(ctx.revenueMultiplier());
+        List<DailyRevenuePaymentBreakdown> rows = dailyRevenuePaymentBreakdownRepository
+                .findByStoreIdAndDate_DateBetween(ctx.kpiDataStoreId(), startDate, endDate);
+
+        BigDecimal tpeRevenue = rows.stream()
+                .map(DailyRevenuePaymentBreakdown::getTpe)
+                .filter(Objects::nonNull)
+                .map(BigDecimal::valueOf)
+                .map(value -> value.multiply(multiplier))
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(SCALE, RoundingMode.HALF_UP);
+
+        if (tpeRevenue.compareTo(BigDecimal.ZERO) < 0) {
+            tpeRevenue = BigDecimal.ZERO;
+        }
+        if (tpeRevenue.compareTo(revenue) > 0) {
+            tpeRevenue = revenue;
+        }
+
+        BigDecimal tpeShare = tpeRevenue.divide(revenue, 6, RoundingMode.HALF_UP);
+        BigDecimal profitTpe = profit.multiply(tpeShare).setScale(SCALE, RoundingMode.HALF_UP);
+        BigDecimal profitCash = profit.subtract(profitTpe).setScale(SCALE, RoundingMode.HALF_UP);
+        if (profitCash.compareTo(BigDecimal.ZERO) < 0) {
+            profitCash = BigDecimal.ZERO;
+        }
+
+        return new ProfitPaymentBreakdown(profitTpe, profitCash);
     }
 
     /**

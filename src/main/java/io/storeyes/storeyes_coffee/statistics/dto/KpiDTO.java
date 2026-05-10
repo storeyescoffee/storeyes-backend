@@ -15,6 +15,8 @@ public class KpiDTO {
     private BigDecimal revenue;
     private BigDecimal charges;
     private BigDecimal profit;
+    private BigDecimal profitTpe;
+    private BigDecimal profitCash;
     private BigDecimal revenueEvolution;
     private BigDecimal chargesPercentage;
     private BigDecimal profitPercentage;
