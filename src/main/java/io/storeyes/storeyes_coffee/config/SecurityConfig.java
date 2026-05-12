@@ -110,6 +110,9 @@ public class SecurityConfig {
                 // Public authentication endpoints - allow login, refresh, logout without authentication
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/api/sales/process").permitAll()
+
+                // Actuator health endpoint - public for load balancer / uptime checks
+                .requestMatchers("/actuator/health").permitAll()
                 
                 // All other /api/** endpoints require authentication
                 //.requestMatchers("/api/**").authenticated()
