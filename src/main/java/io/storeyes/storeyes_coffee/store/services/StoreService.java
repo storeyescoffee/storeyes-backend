@@ -82,7 +82,7 @@ public class StoreService {
      * Store for the given Keycloak user — first {@link RoleMapping} for that user (any role).
      */
     public Store getStoreEntityForUser(String userId) {
-        return roleMappingRepository.findFirstByUser_Id(userId)
+        return roleMappingRepository.findFirstByUser_IdOrderByStore_IdAsc(userId)
                 .map(RoleMapping::getStore)
                 .orElseThrow(() -> new RuntimeException("No store assigned for user with id: " + userId));
     }
