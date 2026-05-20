@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,10 +22,7 @@ public class ACEventService {
     @Transactional(readOnly = true)
     public List<ACEventByDateItemDTO> listByStoreAndDate(Long storeId, LocalDate date) {
         Long dataStoreId = demoStoreDataSourceResolver.resolveAccessDataStoreId(storeId);
-        LocalDateTime startInclusive = date.atStartOfDay();
-        LocalDateTime endExclusive = date.plusDays(1).atStartOfDay();
-        List<ACEvent> events = acEventRepository.findByStoreIdAndEventTimestampDay(
-                dataStoreId, startInclusive, endExclusive);
+        List<ACEvent> events = acEventRepository.findByStoreIdAndDate(dataStoreId, date);
         return events.stream().map(this::toItem).collect(Collectors.toList());
     }
 
@@ -34,7 +30,8 @@ public class ACEventService {
         return ACEventByDateItemDTO.builder()
                 .code(e.getAccessControlStaff().getCode())
                 .name(e.getAccessControlStaff().getName())
-                .time(e.getEventTimestamp())
+                .loginTimestamp(e.getLoginTimestamp())
+                .logoutTimestamp(e.getLogoutTimestamp())
                 .build();
     }
 }

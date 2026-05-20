@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -19,12 +19,10 @@ public interface ACEventRepository extends JpaRepository<ACEvent, Long> {
             SELECT e FROM ACEvent e
             JOIN FETCH e.accessControlStaff
             WHERE e.store.id = :storeId
-            AND e.eventTimestamp >= :startInclusive
-            AND e.eventTimestamp < :endExclusive
-            ORDER BY e.eventTimestamp ASC
+            AND e.date = :date
+            ORDER BY e.loginTimestamp ASC
             """)
-    List<ACEvent> findByStoreIdAndEventTimestampDay(
+    List<ACEvent> findByStoreIdAndDate(
             @Param("storeId") Long storeId,
-            @Param("startInclusive") LocalDateTime startInclusive,
-            @Param("endExclusive") LocalDateTime endExclusive);
+            @Param("date") LocalDate date);
 }
