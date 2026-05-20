@@ -9,6 +9,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -60,6 +61,14 @@ public class DemoStoreMapping {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "access_source_store_id")
     private Store accessSourceStore;
+
+    /**
+     * Fixed date used when fetching alerts for this demo store.
+     * When set, alert queries target this specific date instead of the caller-supplied date.
+     * Results are then rewritten so their date portion matches the caller-supplied {@code ?date=} value.
+     */
+    @Column(name = "alert_date")
+    private LocalDate alertDate;
 
     @Column(name = "created_at", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)

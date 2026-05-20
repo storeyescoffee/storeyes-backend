@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 
 /**
@@ -24,6 +25,24 @@ public class DemoStoreDataSourceResolver {
                 .filter(s -> s != null)
                 .map(s -> s.getId())
                 .orElse(contextStoreId);
+    }
+
+    /**
+     * Resolves the alerts data store and, when the demo mapping carries an {@code alertDate},
+     * returns it so callers can substitute the user-supplied query date with the fixed demo date.
+     *
+     * @param contextStoreId the store derived from the current JWT / store context
+     * @return {@link AlertsDataContext} with the effective store id and an optional fixed demo date
+     */
+    public AlertsDataContext resolveAlertsDataContext(Long contextStoreId) {
+        return demoStoreMappingRepository.findByDemoStore_Id(contextStoreId)
+                .map(m -> {
+                    Long dataStoreId = m.getAlertsSourceStore() != null
+                            ? m.getAlertsSourceStore().getId()
+                            : contextStoreId;
+                    return new AlertsDataContext(dataStoreId, m.getAlertDate());
+                })
+                .orElse(new AlertsDataContext(contextStoreId, null));
     }
 
     /**
@@ -75,4 +94,14 @@ public class DemoStoreDataSourceResolver {
     }
 
     public record KpiDataContext(Long dataStoreId, double revenueQuantityMultiplier) {}
+
+    /**
+     * Holds the effective store id for alerts queries together with an optional fixed demo date.
+     *
+     * @param dataStoreId  store whose alerts table should be queried
+     * @param alertDate    when non-null, the caller should query this date instead of the
+     *                     user-supplied date, then rewrite each returned alert's date portion
+     *                     back to the user-supplied {@code ?date=} value
+     */
+    public record AlertsDataContext(Long dataStoreId, LocalDate alertDate) {}
 }

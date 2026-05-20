@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -62,50 +63,85 @@ public class AlertService {
     }
     
     /**
-     * Get alerts by date and processed status (supports both exact date and date range)
+     * Get alerts by date and processed status (supports both exact date and date range).
      * Store is resolved from CurrentStoreContext (set by StoreContextInterceptor).
-     * By default returns processed alerts, unless unprocessed=true
-     * If date is not provided, defaults to today's date
-     * If returnType=true, returns only alerts with alertType=RETURN
-     * If alertType is provided (NOT_TAPPED or RETURN), returns only alerts of that type (takes precedence over returnType)
+     * By default returns processed alerts, unless unprocessed=true.
+     * If date is not provided, defaults to today's date.
+     * If returnType=true, returns only alerts with alertType=RETURN.
+     * If alertType is provided (NOT_TAPPED or RETURN), returns only alerts of that type (takes precedence over returnType).
+     *
+     * <p><b>Demo-store date substitution:</b> when the demo store mapping carries a non-null
+     * {@code alertDate}, the DB query targets that fixed date instead of the caller-supplied
+     * {@code date}. After fetching, each returned alert's {@code alertDate} is rewritten so
+     * that its <em>date</em> portion matches the original caller-supplied {@code ?date=} value
+     * while preserving the original time-of-day component.</p>
      */
     public List<Alert> getAlertsByDate(LocalDateTime date, LocalDateTime endDate, Boolean unprocessed, Boolean returnType, io.storeyes.storeyes_coffee.alerts.entities.AlertType alertType) {
         Long storeId = CurrentStoreContext.getCurrentStoreId();
         if (storeId == null) {
             throw new RuntimeException("Store context not found for current user");
         }
-        Long dataStoreId = demoStoreDataSourceResolver.resolveAlertsDataStoreId(storeId);
+
+        // Resolve demo-store context (data store + optional fixed alert date).
+        DemoStoreDataSourceResolver.AlertsDataContext alertsCtx =
+                demoStoreDataSourceResolver.resolveAlertsDataContext(storeId);
+        Long dataStoreId = alertsCtx.dataStoreId();
+        LocalDate demoAlertDate = alertsCtx.alertDate(); // null for non-demo stores
+
         boolean filterUnprocessed = Boolean.TRUE.equals(unprocessed);
         boolean filterReturnType = Boolean.TRUE.equals(returnType);
         // alertType param takes precedence; if not set, fall back to returnType for backward compat
         io.storeyes.storeyes_coffee.alerts.entities.AlertType filterAlertType = alertType != null
                 ? alertType
                 : (filterReturnType ? io.storeyes.storeyes_coffee.alerts.entities.AlertType.RETURN : null);
-        
-        // Default to today's date if not provided
-        if (date == null) {
-            date = LocalDate.now().atStartOfDay();
+
+        // Default to today's date if not provided; keep a reference to rewrite results later.
+        final LocalDateTime requestedDate = (date != null) ? date : LocalDate.now().atStartOfDay();
+
+        // When the demo mapping carries a fixed alertDate, substitute the date portion of the
+        // query parameters so we hit the actual rows in the source store.
+        LocalDateTime queryDate;
+        LocalDateTime queryEndDate;
+        if (demoAlertDate != null) {
+            queryDate    = demoAlertDate.atTime(requestedDate.toLocalTime());
+            queryEndDate = (endDate != null) ? demoAlertDate.atTime(endDate.toLocalTime()) : null;
+        } else {
+            queryDate    = requestedDate;
+            queryEndDate = endDate;
         }
-        
+
         List<Alert> alerts;
-        // Date filter is provided (or defaulted to today)
-        if (endDate != null) {
+        if (queryEndDate != null) {
             // Date range
             if (filterUnprocessed) {
-                alerts = alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(date, endDate, dataStoreId);
+                alerts = alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(queryDate, queryEndDate, dataStoreId);
             } else {
-                alerts = alertRepository.findProcessedByAlertDateBetweenAndStoreId(date, endDate, dataStoreId);
+                alerts = alertRepository.findProcessedByAlertDateBetweenAndStoreId(queryDate, queryEndDate, dataStoreId);
             }
         } else {
             // Exact date (or defaulted to today)
             if (filterUnprocessed) {
-                alerts = alertRepository.findUnprocessedByAlertDateAndStoreId(date, dataStoreId);
+                alerts = alertRepository.findUnprocessedByAlertDateAndStoreId(queryDate, dataStoreId);
             } else {
-                alerts = alertRepository.findProcessedByAlertDateAndStoreId(date, dataStoreId);
+                alerts = alertRepository.findProcessedByAlertDateAndStoreId(queryDate, dataStoreId);
             }
         }
-        
-        // Apply filters
+
+        // When a fixed demo alertDate was used, rewrite each alert's date portion back to the
+        // caller-supplied date so the response appears to belong to the requested date.
+        if (demoAlertDate != null) {
+            LocalDate targetDate = requestedDate.toLocalDate();
+            List<Alert> rewritten = new ArrayList<>(alerts.size());
+            for (Alert a : alerts) {
+                if (a.getAlertDate() != null) {
+                    a.setAlertDate(a.getAlertDate().toLocalTime().atDate(targetDate));
+                }
+                rewritten.add(a);
+            }
+            alerts = rewritten;
+        }
+
+        // Apply type / judgement filters
         return alerts.stream()
                 .filter(a -> {
                     // If alertType filter is set, only return matching alerts
