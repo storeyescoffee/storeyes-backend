@@ -144,5 +144,18 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
             @Param("storeId") Long storeId,
             @Param("dayStart") LocalDateTime dayStart,
             @Param("judgements") List<HumanJudgement> judgements);
+
+    /**
+     * Count of processed alerts for a store within a calendar date range (inclusive),
+     * with human judgements shown on the default alerts list ({@code NEW}, {@code TRUE_POSITIVE}).
+     */
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.isProcessed = true AND a.store.id = :storeId "
+            + "AND DATE(a.alertDate) >= :startDate AND DATE(a.alertDate) <= :endDate "
+            + "AND a.humanJudgement IN :judgements")
+    long countProcessedAlertsByDateRange(
+            @Param("storeId") Long storeId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("judgements") List<HumanJudgement> judgements);
 }
 

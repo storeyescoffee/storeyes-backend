@@ -22,4 +22,5 @@ public class KpiDTO {
     private BigDecimal profitPercentage;
     private String chargesStatus;
     private String profitStatus;
+    private long alertsCount;
 }
