@@ -265,18 +265,8 @@ public class AlertService {
      * @return AlertDetailsDTO with sales
      */
     public AlertDetailsDTO getAlertDetailsWithSales(Long id, LocalDate requestedDate) {
-        Long storeId = CurrentStoreContext.getCurrentStoreId();
         Alert alert = alertRepository.findByIdWithSales(id)
                 .orElseThrow(() -> new RuntimeException("Alert not found with id: " + id));
-
-        if (storeId != null) {
-            DemoStoreDataSourceResolver.AlertsDataContext ctx =
-                    demoStoreDataSourceResolver.resolveAlertsDataContext(storeId);
-            if (ctx.alertDate() != null && alert.getAlertDate() != null) {
-                LocalDate targetDate = requestedDate != null ? requestedDate : LocalDate.now();
-                alert.setAlertDate(alert.getAlertDate().toLocalTime().atDate(targetDate));
-            }
-        }
 
         // Use mapper to convert Alert to AlertDetailsDTO
         return alertMapper.toDetailsDTO(alert);
