@@ -26,6 +26,7 @@ public class MultiStoreAuthResponse {
     public static class StoreInfo {
         private Long id;
         private String storeName;
+        private String storeCode;
         private String role;
     }
 }

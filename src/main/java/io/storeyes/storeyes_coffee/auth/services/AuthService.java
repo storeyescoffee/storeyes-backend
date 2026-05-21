@@ -177,6 +177,7 @@ public class AuthService {
                         .map(rm -> MultiStoreAuthResponse.StoreInfo.builder()
                                 .id(rm.getStore().getId())
                                 .storeName(rm.getStore().getName())
+                                .storeCode(rm.getStore().getCode())
                                 .role(rm.getRole().getName())
                                 .build())
                         .collect(java.util.stream.Collectors.toList());
