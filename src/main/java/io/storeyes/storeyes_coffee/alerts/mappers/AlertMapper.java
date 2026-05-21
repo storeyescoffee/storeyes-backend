@@ -22,6 +22,7 @@ public interface AlertMapper {
      */
     @Mapping(target = "sales", source = "sales")
     @Mapping(target = "isProcessed", source = "processed")
+    @Mapping(target = "alertDate", ignore = true)
     AlertDetailsDTO toDetailsDTO(Alert alert);
 }
 
