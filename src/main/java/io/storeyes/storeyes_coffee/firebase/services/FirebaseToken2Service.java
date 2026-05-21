@@ -48,9 +48,18 @@ public class FirebaseToken2Service {
 
         FirebaseToken2 token = existing.get();
         if (isLogin) {
+            String userId = KeycloakTokenUtils.getUserId();
+            if (userId == null) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is not authenticated");
+            }
+            UserInfo user = userInfoRepository.findById(userId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "User not found with id: " + userId));
+            token.setUser(user);
             token.setFirebaseToken(request.getFirebaseToken());
             token.setLoggedIn(true);
         } else {
+            token.setUser(null);
             token.setLoggedIn(false);
         }
         token.setLastLoggedInTimestamp(LocalDateTime.now());

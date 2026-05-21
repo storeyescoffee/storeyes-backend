@@ -26,7 +26,7 @@ public class FirebaseToken2 {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = true)
     private UserInfo user;
 
     @Column(name = "mobile_id", unique = true, nullable = false)
