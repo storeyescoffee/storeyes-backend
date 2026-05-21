@@ -271,7 +271,7 @@ public class SecurityConfig {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         
         // Allowed headers (including Authorization for JWT tokens)
-        configuration.setAllowedHeaders(Arrays.asList("Content-Type", "Authorization", "X-Requested-With"));
+        configuration.setAllowedHeaders(Arrays.asList("Content-Type", "Authorization", "X-Requested-With", "X-Store-Id"));
         
         // Exposed headers
         configuration.setExposedHeaders(Arrays.asList("Authorization", "Content-Type"));
