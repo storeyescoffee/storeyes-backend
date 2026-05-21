@@ -166,11 +166,35 @@ public class AlertService {
     }
     
     /**
-     * Get alert by ID
+     * Get alert by ID.
+     * <p>If the current store is a demo store and {@code requestedDate} is provided (or defaults
+     * to today), the alert's {@code alertDate} is rewritten so its <em>date</em> portion matches
+     * {@code requestedDate} while preserving the original time-of-day component.</p>
+     *
+     * @param id            alert primary key
+     * @param requestedDate caller-supplied {@code ?date=} value; may be {@code null} (today used)
+     */
+    public Alert getAlertById(Long id, LocalDate requestedDate) {
+        Long storeId = CurrentStoreContext.getCurrentStoreId();
+        Alert alert = alertRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Alert not found with id: " + id));
+
+        if (storeId != null) {
+            DemoStoreDataSourceResolver.AlertsDataContext ctx =
+                    demoStoreDataSourceResolver.resolveAlertsDataContext(storeId);
+            if (ctx.alertDate() != null && alert.getAlertDate() != null) {
+                LocalDate targetDate = requestedDate != null ? requestedDate : LocalDate.now();
+                alert.setAlertDate(alert.getAlertDate().toLocalTime().atDate(targetDate));
+            }
+        }
+        return alert;
+    }
+
+    /**
+     * Get alert by ID (no date rewriting — kept for internal callers that don't pass a date).
      */
     public Alert getAlertById(Long id) {
-        return alertRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Alert not found with id: " + id));
+        return getAlertById(id, null);
     }
     
     /**
@@ -231,17 +255,38 @@ public class AlertService {
     }
     
     /**
-     * Get alert details with sales by alert ID
-     * Uses JOIN FETCH to avoid N+1 query problem
-     * @param id Alert ID
+     * Get alert details with sales by alert ID.
+     * <p>If the current store is a demo store and {@code requestedDate} is provided (or defaults
+     * to today), the returned DTO's {@code alertDate} is rewritten so its <em>date</em> portion
+     * matches {@code requestedDate} while preserving the original time-of-day component.</p>
+     *
+     * @param id            alert primary key
+     * @param requestedDate caller-supplied {@code ?date=} value; may be {@code null} (today used)
      * @return AlertDetailsDTO with sales
      */
-    public AlertDetailsDTO getAlertDetailsWithSales(Long id) {
+    public AlertDetailsDTO getAlertDetailsWithSales(Long id, LocalDate requestedDate) {
+        Long storeId = CurrentStoreContext.getCurrentStoreId();
         Alert alert = alertRepository.findByIdWithSales(id)
                 .orElseThrow(() -> new RuntimeException("Alert not found with id: " + id));
-        
+
+        if (storeId != null) {
+            DemoStoreDataSourceResolver.AlertsDataContext ctx =
+                    demoStoreDataSourceResolver.resolveAlertsDataContext(storeId);
+            if (ctx.alertDate() != null && alert.getAlertDate() != null) {
+                LocalDate targetDate = requestedDate != null ? requestedDate : LocalDate.now();
+                alert.setAlertDate(alert.getAlertDate().toLocalTime().atDate(targetDate));
+            }
+        }
+
         // Use mapper to convert Alert to AlertDetailsDTO
         return alertMapper.toDetailsDTO(alert);
+    }
+
+    /**
+     * Get alert details with sales by alert ID (no date rewriting — kept for internal callers).
+     */
+    public AlertDetailsDTO getAlertDetailsWithSales(Long id) {
+        return getAlertDetailsWithSales(id, null);
     }
 }
 
