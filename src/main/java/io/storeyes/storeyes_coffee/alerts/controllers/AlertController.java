@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -58,23 +59,35 @@ public class AlertController {
     }
     
     /**
-     * Get alert by ID
+     * Get alert by ID.
      * GET /api/alerts/{id}
+     *
+     * <p>For demo stores, pass {@code ?date=} (ISO date) to have the returned alert's
+     * {@code alertDate} rewritten to that date (time-of-day is preserved).
+     * If omitted for a demo store, today's date is used.</p>
      */
     @GetMapping("/{id}")
-    public ResponseEntity<Alert> getAlertById(@PathVariable Long id) {
-        Alert alert = alertService.getAlertById(id);
+    public ResponseEntity<Alert> getAlertById(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        Alert alert = alertService.getAlertById(id, date);
         return ResponseEntity.ok(alert);
     }
-    
+
     /**
-     * Get alert details with sales by ID
+     * Get alert details with sales by ID.
      * GET /api/alerts/{id}/details
-     * Uses JOIN FETCH to avoid N+1 query problem
+     * Uses JOIN FETCH to avoid N+1 query problem.
+     *
+     * <p>For demo stores, pass {@code ?date=} (ISO date) to have the returned alert's
+     * {@code alertDate} rewritten to that date (time-of-day is preserved).
+     * If omitted for a demo store, today's date is used.</p>
      */
     @GetMapping("/{id}/details")
-    public ResponseEntity<AlertDetailsDTO> getAlertDetailsWithSales(@PathVariable Long id) {
-        AlertDetailsDTO alertDetails = alertService.getAlertDetailsWithSales(id);
+    public ResponseEntity<AlertDetailsDTO> getAlertDetailsWithSales(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        AlertDetailsDTO alertDetails = alertService.getAlertDetailsWithSales(id, date);
         return ResponseEntity.ok(alertDetails);
     }
     

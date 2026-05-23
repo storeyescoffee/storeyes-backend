@@ -40,10 +40,13 @@ public class HomeSummaryService {
 
         BigDecimal monthProfit = statisticsService.getMonthProfitMad(monthKey);
 
-        Long alertsStoreId = demoStoreDataSourceResolver.resolveAlertsDataStoreId(storeId);
+        DemoStoreDataSourceResolver.AlertsDataContext alertsCtx =
+                demoStoreDataSourceResolver.resolveAlertsDataContext(storeId);
+        // For demo stores, use the fixed alertDate from the mapping instead of the display date
+        LocalDate alertsQueryDate = alertsCtx.alertDate() != null ? alertsCtx.alertDate() : displayDate;
         long alertsCount = alertRepository.countProcessedHomeAlertsByDay(
-                alertsStoreId,
-                displayDate.atStartOfDay(),
+                alertsCtx.dataStoreId(),
+                alertsQueryDate.atStartOfDay(),
                 List.of(HumanJudgement.NEW, HumanJudgement.TRUE_POSITIVE));
 
         Optional<Double> dailyTtc = kpiService.getDailyRevenueTtcForDate(storeId, displayDate);

@@ -3,6 +3,7 @@ package io.storeyes.storeyes_coffee.auth.services;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.storeyes.storeyes_coffee.auth.dto.AuthResponse;
+import io.storeyes.storeyes_coffee.auth.dto.MultiStoreAuthResponse;
 import io.storeyes.storeyes_coffee.auth.dto.UserInfoDTO;
 import io.storeyes.storeyes_coffee.auth.entities.UserInfo;
 import io.storeyes.storeyes_coffee.auth.exceptions.TokenRefreshException;
@@ -22,7 +23,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -133,6 +134,63 @@ public class AuthService {
             enrichWithStoreAttributes(builder, (String) responseBody.get("access_token"));
             return builder.build();
                 
+        } catch (HttpClientErrorException.Unauthorized e) {
+            throw new RuntimeException("Invalid username or password", e);
+        } catch (HttpClientErrorException e) {
+            throw new RuntimeException("Authentication failed: " + e.getResponseBodyAsString(), e);
+        }
+    }
+
+    /**
+     * Authenticate user and return tokens together with all stores the user belongs to.
+     */
+    public MultiStoreAuthResponse loginMultiStore(String username, String password) {
+        String tokenEndpoint = keycloakIssuerUri + "/protocol/openid-connect/token";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("grant_type", "password");
+        body.add("client_id", resolvedClientId());
+        addClientSecretIfPresent(body);
+        body.add("username", username);
+        body.add("password", password);
+        body.add("scope", "openid");
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(tokenEndpoint, request, Map.class);
+
+            Map<String, Object> responseBody = response.getBody();
+            if (responseBody == null) {
+                throw new RuntimeException("Empty response from Keycloak");
+            }
+
+            Jwt jwt = jwtDecoder.decode((String) responseBody.get("access_token"));
+            String userId = jwt.getSubject();
+
+            List<MultiStoreAuthResponse.StoreInfo> stores = java.util.Collections.emptyList();
+            if (userId != null) {
+                stores = roleMappingRepository.findAllByUser_IdOrderByStore_IdAsc(userId).stream()
+                        .map(rm -> MultiStoreAuthResponse.StoreInfo.builder()
+                                .id(rm.getStore().getId())
+                                .storeName(rm.getStore().getName())
+                                .storeCode(rm.getStore().getCode())
+                                .role(rm.getRole().getName())
+                                .build())
+                        .collect(java.util.stream.Collectors.toList());
+            }
+
+            return MultiStoreAuthResponse.builder()
+                    .accessToken((String) responseBody.get("access_token"))
+                    .refreshToken((String) responseBody.get("refresh_token"))
+                    .expiresIn(getExpiresIn(responseBody))
+                    .tokenType((String) responseBody.getOrDefault("token_type", "Bearer"))
+                    .stores(stores)
+                    .build();
+
         } catch (HttpClientErrorException.Unauthorized e) {
             throw new RuntimeException("Invalid username or password", e);
         } catch (HttpClientErrorException e) {
@@ -370,7 +428,7 @@ public class AuthService {
             if (userId == null) {
                 return;
             }
-            roleMappingRepository.findFirstByUser_Id(userId).ifPresent(rm -> {
+            roleMappingRepository.findFirstByUser_IdOrderByStore_IdAsc(userId).ifPresent(rm -> {
                 builder.storeCode(rm.getStore().getCode());
                 builder.role(rm.getRole().getName());
             });

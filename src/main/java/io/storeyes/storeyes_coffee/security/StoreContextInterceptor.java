@@ -26,7 +26,16 @@ public class StoreContextInterceptor implements HandlerInterceptor {
         if (userId == null) {
             return true;
         }
-        roleMappingRepository.findFirstByUser_Id(userId)
+
+        String headerValue = request.getHeader("X-Store-Id");
+        if (headerValue != null && !headerValue.isBlank()) {
+            try {
+                request.setAttribute(CurrentStoreContext.REQUEST_ATTR_STORE_ID, Long.parseLong(headerValue.trim()));
+            } catch (NumberFormatException ignored) {}
+            return true;
+        }
+
+        roleMappingRepository.findFirstByUser_IdOrderByStore_IdAsc(userId)
                 .map(rm -> rm.getStore().getId())
                 .ifPresent(id -> request.setAttribute(CurrentStoreContext.REQUEST_ATTR_STORE_ID, id));
         return true;

@@ -15,5 +15,6 @@ public class ACEventByDateItemDTO {
 
     private String code;
     private String name;
-    private LocalDateTime time;
+    private LocalDateTime loginTimestamp;
+    private LocalDateTime logoutTimestamp;
 }

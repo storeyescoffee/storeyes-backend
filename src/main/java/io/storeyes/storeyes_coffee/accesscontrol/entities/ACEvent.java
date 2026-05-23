@@ -3,12 +3,16 @@ package io.storeyes.storeyes_coffee.accesscontrol.entities;
 import jakarta.persistence.*;
 
 import io.storeyes.storeyes_coffee.store.entities.Store;
+
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+
+
 
 @Data
 @NoArgsConstructor
@@ -18,6 +22,8 @@ import lombok.Builder;
 @Table(name = "access_control_events")
 public class ACEvent {
     
+
+
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "access_control_event_id_seq")
     @SequenceGenerator(name = "access_control_event_id_seq", sequenceName = "access_control_event_id_seq", allocationSize = 1)
@@ -35,8 +41,15 @@ public class ACEvent {
     @Builder.Default
     private String eventType = "FINGERPRINT";
 
-    @Column(name = "event_timestamp", nullable = false)
-    private LocalDateTime eventTimestamp;
+    @Column(name = "event_date", nullable = false)
+    private LocalDate date;
+
+    @Column(name = "login_timestamp", nullable = false)
+    private LocalDateTime loginTimestamp;
+
+    @Column(name = "logout_timestamp")
+    private LocalDateTime logoutTimestamp;
+
 
 
 }

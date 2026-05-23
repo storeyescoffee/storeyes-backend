@@ -109,7 +109,11 @@ public class SecurityConfig {
                 
                 // Public authentication endpoints - allow login, refresh, logout without authentication
                 .requestMatchers("/auth/**").permitAll()
+                .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/sales/process").permitAll()
+
+                // Actuator health endpoint - public for load balancer / uptime checks
+                .requestMatchers("/actuator/health").permitAll()
                 
                 // All other /api/** endpoints require authentication
                 //.requestMatchers("/api/**").authenticated()
@@ -267,7 +271,7 @@ public class SecurityConfig {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         
         // Allowed headers (including Authorization for JWT tokens)
-        configuration.setAllowedHeaders(Arrays.asList("Content-Type", "Authorization", "X-Requested-With"));
+        configuration.setAllowedHeaders(Arrays.asList("Content-Type", "Authorization", "X-Requested-With", "X-Store-Id"));
         
         // Exposed headers
         configuration.setExposedHeaders(Arrays.asList("Authorization", "Content-Type"));
