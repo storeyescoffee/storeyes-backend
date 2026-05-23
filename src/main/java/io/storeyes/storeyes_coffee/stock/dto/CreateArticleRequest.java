@@ -27,4 +27,7 @@ public class CreateArticleRequest {
 
     @Size(max = 100, message = "Category must not exceed 100 characters")
     private String category;
+
+    /** When true, this article may be used as a nested ingredient in other articles' recipes. */
+    private Boolean allowAsSubRecipeArticle;
 }

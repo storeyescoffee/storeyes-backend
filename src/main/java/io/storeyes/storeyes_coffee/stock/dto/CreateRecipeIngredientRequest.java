@@ -15,8 +15,11 @@ import java.math.BigDecimal;
 @Builder
 public class CreateRecipeIngredientRequest {
 
-    @NotNull(message = "Product is required")
+    /** Set for a direct stock ingredient (exclusive with {@link #ingredientArticleId}). */
     private Long productId;
+
+    /** Set for a nested article ingredient (exclusive with {@link #productId}). */
+    private Long ingredientArticleId;
 
     @NotNull(message = "Quantity is required")
     @DecimalMin(value = "0", inclusive = false, message = "Quantity must be positive")

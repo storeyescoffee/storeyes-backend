@@ -13,10 +13,11 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
     @Query("""
             SELECT DISTINCT r FROM RecipeIngredient r
             JOIN FETCH r.article
-            JOIN FETCH r.product p
-            JOIN FETCH p.store
+            LEFT JOIN FETCH r.product p
+            LEFT JOIN FETCH r.ingredientArticle ia
+            LEFT JOIN FETCH ia.store
             WHERE r.article.id = :articleId
-            ORDER BY p.name
+            ORDER BY COALESCE(p.name, ia.name)
             """)
     List<RecipeIngredient> findByArticleIdOrderByProductName(@Param("articleId") Long articleId);
 
@@ -26,7 +27,14 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
 
     boolean existsByArticleIdAndProductId(Long articleId, Long productId);
 
+    boolean existsByArticleIdAndIngredientArticle_Id(Long articleId, Long ingredientArticleId);
+
+    long countByIngredientArticle_Id(Long ingredientArticleId);
+
     void deleteByArticleIdAndProductId(Long articleId, Long productId);
 
     void deleteByProduct_Id(Long productId);
+
+    @Query("SELECT ri.ingredientArticle.id FROM RecipeIngredient ri WHERE ri.article.id = :articleId AND ri.ingredientArticle IS NOT NULL")
+    List<Long> findNestedIngredientArticleIdsByArticleId(@Param("articleId") Long articleId);
 }

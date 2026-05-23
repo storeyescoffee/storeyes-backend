@@ -23,4 +23,6 @@ public class UpdateArticleRequest {
 
     @Size(max = 100, message = "Category must not exceed 100 characters")
     private String category;
+
+    private Boolean allowAsSubRecipeArticle;
 }

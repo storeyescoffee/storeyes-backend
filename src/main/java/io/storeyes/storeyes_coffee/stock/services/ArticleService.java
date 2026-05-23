@@ -6,6 +6,7 @@ import io.storeyes.storeyes_coffee.stock.dto.CreateArticleRequest;
 import io.storeyes.storeyes_coffee.stock.dto.UpdateArticleRequest;
 import io.storeyes.storeyes_coffee.stock.entities.Article;
 import io.storeyes.storeyes_coffee.stock.repositories.ArticleRepository;
+import io.storeyes.storeyes_coffee.stock.repositories.RecipeIngredientRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
@@ -23,6 +24,7 @@ public class ArticleService {
     private final ArticleRepository articleRepository;
     private final StoreRepository storeRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
+    private final RecipeIngredientRepository recipeIngredientRepository;
 
     private Long getStoreId() {
         return CurrentStoreContext.requireCurrentStoreId();
@@ -57,6 +59,7 @@ public class ArticleService {
                 .name(request.getName().trim())
                 .salePrice(request.getSalePrice())
                 .category(request.getCategory() != null && !request.getCategory().isBlank() ? request.getCategory().trim() : null)
+                .allowAsSubRecipeArticle(Boolean.TRUE.equals(request.getAllowAsSubRecipeArticle()))
                 .build();
         Article saved = articleRepository.save(article);
         return toResponse(saved);
@@ -76,6 +79,13 @@ public class ArticleService {
         }
         if (request.getCategory() != null) {
             article.setCategory(request.getCategory().trim().isEmpty() ? null : request.getCategory().trim());
+        }
+        if (request.getAllowAsSubRecipeArticle() != null) {
+            if (Boolean.FALSE.equals(request.getAllowAsSubRecipeArticle())
+                    && recipeIngredientRepository.countByIngredientArticle_Id(id) > 0) {
+                throw new RuntimeException("Cannot disable nested-ingredient flag: this article is referenced by other recipes");
+            }
+            article.setAllowAsSubRecipeArticle(request.getAllowAsSubRecipeArticle());
         }
 
         Article updated = articleRepository.save(article);
@@ -103,6 +113,7 @@ public class ArticleService {
                 .name(article.getName())
                 .salePrice(article.getSalePrice())
                 .category(article.getCategory())
+                .allowAsSubRecipeArticle(article.getAllowAsSubRecipeArticle())
                 .createdAt(article.getCreatedAt())
                 .updatedAt(article.getUpdatedAt())
                 .build();

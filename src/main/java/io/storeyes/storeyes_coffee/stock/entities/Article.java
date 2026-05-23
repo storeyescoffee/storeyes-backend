@@ -43,6 +43,13 @@ public class Article {
     @Column(name = "category", length = 100)
     private String category;
 
+    /**
+     * When true, this article may be selected as a nested ingredient in other articles' recipes.
+     */
+    @Column(name = "allow_as_sub_recipe_article", nullable = false)
+    @Builder.Default
+    private Boolean allowAsSubRecipeArticle = Boolean.FALSE;
+
     @Column(name = "created_at", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
     @CreationTimestamp

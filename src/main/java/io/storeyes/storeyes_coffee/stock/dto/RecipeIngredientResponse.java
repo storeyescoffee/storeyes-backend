@@ -15,9 +15,12 @@ import java.time.LocalDateTime;
 public class RecipeIngredientResponse {
     private Long id;
     private Long articleId;
+    private RecipeIngredientType ingredientType;
     private Long productId;
     private String productName;
     private String productUnit;
+    private Long ingredientArticleId;
+    private String ingredientArticleName;
     private BigDecimal quantity;
     /**
      * Cost in MAD for this recipe line quantity using the stock product’s current {@code unit_price},

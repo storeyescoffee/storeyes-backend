@@ -3,6 +3,7 @@ package io.storeyes.storeyes_coffee.stock.services;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.dto.CreateRecipeIngredientRequest;
 import io.storeyes.storeyes_coffee.stock.dto.RecipeIngredientResponse;
+import io.storeyes.storeyes_coffee.stock.dto.RecipeIngredientType;
 import io.storeyes.storeyes_coffee.stock.dto.UpdateRecipeIngredientRequest;
 import io.storeyes.storeyes_coffee.stock.entities.Article;
 import io.storeyes.storeyes_coffee.stock.entities.RecipeIngredient;
@@ -16,12 +17,18 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class RecipeIngredientService {
+
+    private static final int MAX_NESTED_LINE_COST_DEPTH = 32;
 
     private final RecipeIngredientRepository recipeIngredientRepository;
     private final StockProductRepository stockProductRepository;
@@ -55,21 +62,77 @@ public class RecipeIngredientService {
     public RecipeIngredientResponse createRecipeIngredient(Long articleId, CreateRecipeIngredientRequest request) {
         Long storeId = getStockDataStoreId();
         Article article = articleService.getArticleEntity(articleId, storeId);
-        StockProduct product = stockProductRepository.findById(request.getProductId())
-                .orElseThrow(() -> new RuntimeException("Stock product not found with id: " + request.getProductId()));
-        if (!product.getStore().getId().equals(storeId)) {
-            throw new RuntimeException("Stock product not found with id: " + request.getProductId());
+
+        boolean hasProduct = request.getProductId() != null;
+        boolean hasIngredientArticle = request.getIngredientArticleId() != null;
+        if (hasProduct == hasIngredientArticle) {
+            throw new RuntimeException("Provide exactly one of productId or ingredientArticleId");
         }
-        if (recipeIngredientRepository.existsByArticleIdAndProductId(articleId, request.getProductId())) {
-            throw new RuntimeException("This product is already in the recipe for this article");
+
+        if (hasProduct) {
+            StockProduct product = stockProductRepository.findById(request.getProductId())
+                    .orElseThrow(() -> new RuntimeException("Stock product not found with id: " + request.getProductId()));
+            if (!product.getStore().getId().equals(storeId)) {
+                throw new RuntimeException("Stock product not found with id: " + request.getProductId());
+            }
+            if (recipeIngredientRepository.existsByArticleIdAndProductId(articleId, request.getProductId())) {
+                throw new RuntimeException("This product is already in the recipe for this article");
+            }
+            RecipeIngredient ri = RecipeIngredient.builder()
+                    .article(article)
+                    .product(product)
+                    .quantity(request.getQuantity())
+                    .build();
+            RecipeIngredient saved = recipeIngredientRepository.save(ri);
+            return toResponse(saved);
         }
+
+        Article child = articleService.getArticleEntity(request.getIngredientArticleId(), storeId);
+        if (!Boolean.TRUE.equals(child.getAllowAsSubRecipeArticle())) {
+            throw new RuntimeException("This article is not allowed as a nested recipe ingredient");
+        }
+        if (child.getId().equals(articleId)) {
+            throw new RuntimeException("An article cannot be an ingredient of itself");
+        }
+        if (recipeIngredientRepository.existsByArticleIdAndIngredientArticle_Id(articleId, child.getId())) {
+            throw new RuntimeException("This article is already in the recipe as a nested ingredient");
+        }
+        if (introducesIngredientCycle(articleId, child.getId())) {
+            throw new RuntimeException("This nested ingredient would create a recipe cycle");
+        }
+
         RecipeIngredient ri = RecipeIngredient.builder()
                 .article(article)
-                .product(product)
+                .ingredientArticle(child)
                 .quantity(request.getQuantity())
                 .build();
         RecipeIngredient saved = recipeIngredientRepository.save(ri);
         return toResponse(saved);
+    }
+
+    /**
+     * True if following nested-article edges from {@code startArticleId} can reach {@code targetArticleId}.
+     */
+    private boolean introducesIngredientCycle(Long recipeOwnerArticleId, Long newIngredientArticleId) {
+        Deque<Long> stack = new ArrayDeque<>();
+        stack.push(newIngredientArticleId);
+        Set<Long> visited = new HashSet<>();
+        while (!stack.isEmpty()) {
+            Long cur = stack.pop();
+            if (cur.equals(recipeOwnerArticleId)) {
+                return true;
+            }
+            if (!visited.add(cur)) {
+                continue;
+            }
+            List<Long> nextIds = recipeIngredientRepository.findNestedIngredientArticleIdsByArticleId(cur);
+            for (Long n : nextIds) {
+                if (n != null) {
+                    stack.push(n);
+                }
+            }
+        }
+        return false;
     }
 
     @Transactional
@@ -118,15 +181,64 @@ public class RecipeIngredientService {
         return qtyForAmount.multiply(unitPrice).setScale(2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Rolls up nested article lines to stock line costs (empty nested recipe → zero).
+     */
+    private BigDecimal computeNestedArticleLineCost(Long ingredientArticleId, BigDecimal parentLineQuantity, Set<Long> path, int depth) {
+        if (depth > MAX_NESTED_LINE_COST_DEPTH
+                || parentLineQuantity == null
+                || parentLineQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        if (!path.add(ingredientArticleId)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal sum = BigDecimal.ZERO;
+        List<RecipeIngredient> lines = recipeIngredientRepository.findByArticleIdOrderByProductName(ingredientArticleId);
+        for (RecipeIngredient line : lines) {
+            if (line.getQuantity() == null || line.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal scaled = line.getQuantity().multiply(parentLineQuantity);
+            if (line.getProduct() != null) {
+                sum = sum.add(computeLineCostAtCurrentPrice(line.getProduct(), scaled));
+            } else if (line.getIngredientArticle() != null && line.getIngredientArticle().getId() != null) {
+                sum = sum.add(computeNestedArticleLineCost(line.getIngredientArticle().getId(), scaled, path, depth + 1));
+            }
+        }
+        path.remove(ingredientArticleId);
+        return sum.setScale(2, RoundingMode.HALF_UP);
+    }
+
     private RecipeIngredientResponse toResponse(RecipeIngredient ri) {
-        StockProduct p = ri.getProduct();
-        BigDecimal lineCost = computeLineCostAtCurrentPrice(p, ri.getQuantity());
+        if (ri.getProduct() != null) {
+            StockProduct p = ri.getProduct();
+            BigDecimal lineCost = computeLineCostAtCurrentPrice(p, ri.getQuantity());
+            return RecipeIngredientResponse.builder()
+                    .id(ri.getId())
+                    .articleId(ri.getArticle().getId())
+                    .ingredientType(RecipeIngredientType.STOCK)
+                    .productId(p.getId())
+                    .productName(p.getName())
+                    .productUnit(p.getUnit())
+                    .ingredientArticleId(null)
+                    .ingredientArticleName(null)
+                    .quantity(ri.getQuantity())
+                    .lineCostAtCurrentPrice(lineCost)
+                    .createdAt(ri.getCreatedAt())
+                    .build();
+        }
+        Article nested = ri.getIngredientArticle();
+        BigDecimal lineCost = computeNestedArticleLineCost(nested.getId(), ri.getQuantity(), new HashSet<>(), 0);
         return RecipeIngredientResponse.builder()
                 .id(ri.getId())
                 .articleId(ri.getArticle().getId())
-                .productId(p.getId())
-                .productName(p.getName())
-                .productUnit(p.getUnit())
+                .ingredientType(RecipeIngredientType.ARTICLE)
+                .productId(null)
+                .productName(null)
+                .productUnit(null)
+                .ingredientArticleId(nested.getId())
+                .ingredientArticleName(nested.getName())
                 .quantity(ri.getQuantity())
                 .lineCostAtCurrentPrice(lineCost)
                 .createdAt(ri.getCreatedAt())

@@ -8,6 +8,7 @@ import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.stock.repositories.RecipeIngredientRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockMovementRepository;
+import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -18,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -30,6 +32,9 @@ class StockConsumptionServiceTest {
 
     @Mock
     private StockMovementRepository stockMovementRepository;
+
+    @Mock
+    private StockProductRepository stockProductRepository;
 
     @InjectMocks
     private StockConsumptionService stockConsumptionService;
@@ -50,6 +55,8 @@ class StockConsumptionServiceTest {
 
         when(recipeIngredientRepository.findByArticleIdOrderByProductName(10L))
                 .thenReturn(List.of(ri1, ri2));
+        when(stockProductRepository.findById(1L)).thenReturn(Optional.of(product1));
+        when(stockProductRepository.findById(2L)).thenReturn(Optional.of(product2));
 
         stockConsumptionService.createConsumptionForArticleSale(
                 1L, 10L, new BigDecimal("2"), LocalDate.of(2025, 3, 5), 100L);

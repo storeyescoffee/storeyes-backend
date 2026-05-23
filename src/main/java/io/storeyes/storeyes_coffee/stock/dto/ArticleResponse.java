@@ -17,6 +17,7 @@ public class ArticleResponse {
     private String name;
     private BigDecimal salePrice;
     private String category;
+    private Boolean allowAsSubRecipeArticle;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
