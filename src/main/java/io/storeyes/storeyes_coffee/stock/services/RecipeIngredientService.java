@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -46,7 +48,10 @@ public class RecipeIngredientService {
     public List<RecipeIngredientResponse> getRecipeByArticleId(Long articleId) {
         Long storeId = getStockDataStoreId();
         Article article = articleService.getArticleEntity(articleId, storeId);
-        List<RecipeIngredient> list = recipeIngredientRepository.findByArticleIdOrderByProductName(article.getId());
+        List<RecipeIngredient> list = new ArrayList<>(recipeIngredientRepository.findByArticleIdOrderByProductName(article.getId()));
+        list.sort(Comparator
+                .comparing(this::getIngredientDisplayName, String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(RecipeIngredient::getId, Comparator.nullsLast(Long::compareTo)));
         return list.stream().map(this::toResponse).collect(Collectors.toList());
     }
 
@@ -243,5 +248,15 @@ public class RecipeIngredientService {
                 .lineCostAtCurrentPrice(lineCost)
                 .createdAt(ri.getCreatedAt())
                 .build();
+    }
+
+    private String getIngredientDisplayName(RecipeIngredient ri) {
+        if (ri.getProduct() != null && ri.getProduct().getName() != null) {
+            return ri.getProduct().getName();
+        }
+        if (ri.getIngredientArticle() != null && ri.getIngredientArticle().getName() != null) {
+            return ri.getIngredientArticle().getName();
+        }
+        return "";
     }
 }

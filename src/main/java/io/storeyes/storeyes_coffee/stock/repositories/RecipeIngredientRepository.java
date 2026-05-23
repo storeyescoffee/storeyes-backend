@@ -11,13 +11,11 @@ import java.util.Optional;
 public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredient, Long> {
 
     @Query("""
-            SELECT DISTINCT r FROM RecipeIngredient r
+            SELECT r FROM RecipeIngredient r
             JOIN FETCH r.article
-            LEFT JOIN FETCH r.product p
-            LEFT JOIN FETCH r.ingredientArticle ia
-            LEFT JOIN FETCH ia.store
+            LEFT JOIN FETCH r.product
+            LEFT JOIN FETCH r.ingredientArticle
             WHERE r.article.id = :articleId
-            ORDER BY COALESCE(p.name, ia.name)
             """)
     List<RecipeIngredient> findByArticleIdOrderByProductName(@Param("articleId") Long articleId);
 
