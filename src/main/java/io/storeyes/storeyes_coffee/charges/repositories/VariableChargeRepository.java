@@ -52,4 +52,9 @@ public interface VariableChargeRepository extends JpaRepository<VariableCharge, 
      * Find variable charges by store and date
      */
     List<VariableCharge> findByStoreIdAndDate(Long storeId, LocalDate date);
+
+    /**
+     * Find variable charges by store and exact notes value (used to locate charges linked to a supplier order)
+     */
+    List<VariableCharge> findByStoreIdAndNotes(Long storeId, String notes);
 }
