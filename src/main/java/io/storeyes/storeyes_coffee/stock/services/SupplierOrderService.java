@@ -223,8 +223,9 @@ public class SupplierOrderService {
         Long storeId = getStoreId();
         SupplierOrder order = supplierOrderRepository.findByIdAndStore_Id(id, storeId)
                 .orElseThrow(() -> new IllegalArgumentException("Supplier order not found"));
+        // For converted orders, first remove the linked variable charges and their stock movements
         if (order.getConvertedAt() != null) {
-            throw new IllegalArgumentException("Cannot delete a converted supplier order");
+            chargeService.deleteVariableChargesForSupplierOrder(id);
         }
         supplierOrderRepository.delete(order);
     }
