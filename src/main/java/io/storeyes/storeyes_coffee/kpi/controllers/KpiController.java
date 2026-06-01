@@ -1,6 +1,8 @@
 package io.storeyes.storeyes_coffee.kpi.controllers;
 
 import io.storeyes.storeyes_coffee.kpi.dto.DailyReportDTO;
+import io.storeyes.storeyes_coffee.kpi.dto.Granularity;
+import io.storeyes.storeyes_coffee.kpi.dto.StatisticsResponseDTO;
 import io.storeyes.storeyes_coffee.kpi.dto.UpdateRevenueBreakdownRequest;
 import io.storeyes.storeyes_coffee.kpi.repositories.DateDimensionRepository;
 import io.storeyes.storeyes_coffee.kpi.services.KpiService;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.Collections;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/kpi")
@@ -77,6 +80,53 @@ public class KpiController {
         // Return updated daily report
         DailyReportDTO report = kpiService.getDailyReport(storeId, date);
         return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Get aggregated statistics for a date range — powers the Statistiques dashboard.
+     * <p>
+     * GET /api/kpi/statistics
+     *
+     * <ul>
+     *   <li><b>DAILY</b>   — {@code from} and {@code to} required; one chart point per day.</li>
+     *   <li><b>WEEKLY</b>  — {@code from} and {@code to} required; chart points are rolling
+     *       7-day windows anchored on J-1 (yesterday), going backward.</li>
+     *   <li><b>MONTHLY</b> — {@code from}/{@code to} are optional and ignored; the backend
+     *       always returns the current month + the 11 preceding months (12 points).</li>
+     * </ul>
+     *
+     * @param from        range start (YYYY-MM-DD); required for DAILY and WEEKLY
+     * @param to          range end   (YYYY-MM-DD); required for DAILY and WEEKLY
+     * @param granularity DAILY | WEEKLY | MONTHLY (default DAILY)
+     * @param limit       max products to return in bestSales / worstSales (default 5)
+     */
+    @GetMapping("/statistics")
+    public ResponseEntity<?> getStatistics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "DAILY") Granularity granularity,
+            @RequestParam(defaultValue = "5") int limit) {
+
+        Long storeId = CurrentStoreContext.getCurrentStoreId();
+        if (storeId == null) {
+            throw new RuntimeException("Store context not found for current user");
+        }
+
+        // from and to are required for DAILY and WEEKLY
+        if (granularity != Granularity.MONTHLY) {
+            if (from == null || to == null) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "'from' and 'to' are required for DAILY and WEEKLY granularity"));
+            }
+            if (from.isAfter(to)) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "'from' must not be after 'to'"));
+            }
+        }
+        // For MONTHLY: from/to are ignored; the service computes the last 12 months internally.
+
+        StatisticsResponseDTO response = kpiService.getStatistics(storeId, from, to, granularity, limit);
+        return ResponseEntity.ok(response);
     }
 }
 
