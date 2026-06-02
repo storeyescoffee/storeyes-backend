@@ -228,9 +228,8 @@ public class SupplierOrderService {
         if (order.getConvertedAt() != null) {
             chargeService.deleteVariableChargesForSupplierOrder(id);
         }
-        // Native delete bypasses Hibernate orphanRemoval; DB CASCADE handles the lines.
-        // flushAutomatically flushes pending charge deletions before the native SQL runs.
-        // clearAutomatically evicts the stale SupplierOrder from L1 cache so commit is clean.
+        // Delete lines first — the FK has no CASCADE DELETE, so the order delete would fail otherwise.
+        supplierOrderRepository.deleteLinesByOrderId(id);
         supplierOrderRepository.deleteNative(id);
     }
 
