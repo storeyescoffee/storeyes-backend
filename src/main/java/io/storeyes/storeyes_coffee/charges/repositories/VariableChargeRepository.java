@@ -2,6 +2,7 @@ package io.storeyes.storeyes_coffee.charges.repositories;
 
 import io.storeyes.storeyes_coffee.charges.entities.VariableCharge;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -54,7 +55,17 @@ public interface VariableChargeRepository extends JpaRepository<VariableCharge, 
     List<VariableCharge> findByStoreIdAndDate(Long storeId, LocalDate date);
 
     /**
-     * Find variable charges by store and exact notes value (used to locate charges linked to a supplier order)
+     * Find variable charges linked to a supplier order via the notes marker "supplier_order:<id>".
+     * Explicit @Query avoids any Spring Data JPA derived-method resolution ambiguity.
      */
-    List<VariableCharge> findByStoreIdAndNotes(Long storeId, String notes);
+    @Query("SELECT vc FROM VariableCharge vc WHERE vc.store.id = :storeId AND vc.notes = :notes")
+    List<VariableCharge> findByStoreIdAndNotes(@Param("storeId") Long storeId, @Param("notes") String notes);
+
+    /**
+     * Bulk JPQL delete by ID — bypasses entity lifecycle callbacks and L1-cache entity-management,
+     * avoiding potential StaleStateException when used alongside native queries in the same transaction.
+     */
+    @Modifying
+    @Query("DELETE FROM VariableCharge vc WHERE vc.id = :id")
+    void deleteVariableChargeById(@Param("id") Long id);
 }

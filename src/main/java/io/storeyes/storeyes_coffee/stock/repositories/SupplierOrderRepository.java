@@ -23,10 +23,12 @@ public interface SupplierOrderRepository extends JpaRepository<SupplierOrder, Lo
     Optional<SupplierOrder> findByIdAndStore_Id(Long id, Long storeId);
 
     /**
-     * Native delete so the DB's ON DELETE CASCADE handles supplier_order_lines,
-     * bypassing Hibernate's orphanRemoval which can fail on lazy collections.
+     * Native delete so the DB's ON DELETE CASCADE handles supplier_order_lines.
+     * flushAutomatically: flush pending JPA changes (variable charge deletions) to DB first.
+     * clearAutomatically: clear the L1 cache after so Hibernate doesn't try to flush
+     * the stale cached SupplierOrder entity at commit and throw a StaleStateException.
      */
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "DELETE FROM supplier_orders WHERE id = :id", nativeQuery = true)
     void deleteNative(@Param("id") Long id);
 

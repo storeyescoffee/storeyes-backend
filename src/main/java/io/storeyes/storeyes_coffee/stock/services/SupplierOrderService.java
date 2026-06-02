@@ -234,7 +234,7 @@ public class SupplierOrderService {
             List<VariableCharge> linked = variableChargeRepository.findByStoreIdAndNotes(storeId, notesMarker);
             for (VariableCharge charge : linked) {
                 stockMovementService.deleteMovementsForVariableCharge(charge.getId());
-                variableChargeRepository.deleteById(charge.getId());
+                variableChargeRepository.deleteVariableChargeById(charge.getId());
             }
         }
         // Native SQL delete — lets the DB's ON DELETE CASCADE handle supplier_order_lines,
