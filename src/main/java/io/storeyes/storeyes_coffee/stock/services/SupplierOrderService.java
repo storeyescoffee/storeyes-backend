@@ -237,7 +237,9 @@ public class SupplierOrderService {
                 variableChargeRepository.deleteById(charge.getId());
             }
         }
-        supplierOrderRepository.delete(order);
+        // Native SQL delete — lets the DB's ON DELETE CASCADE handle supplier_order_lines,
+        // bypassing Hibernate's orphanRemoval which can fail on uninitialized lazy collections.
+        supplierOrderRepository.deleteNative(id);
     }
 
     @Transactional
