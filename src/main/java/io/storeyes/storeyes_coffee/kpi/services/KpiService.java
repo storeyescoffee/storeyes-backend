@@ -9,6 +9,7 @@ import io.storeyes.storeyes_coffee.kpi.entities.FactKpiHourly;
 import io.storeyes.storeyes_coffee.kpi.entities.FactKpiProductDaily;
 import io.storeyes.storeyes_coffee.kpi.entities.FactKpiServerDaily;
 import io.storeyes.storeyes_coffee.kpi.repositories.*;
+import io.storeyes.storeyes_coffee.sales.repositories.CoffeeSalesHourlyRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
@@ -36,6 +37,7 @@ public class KpiService {
     private final DateDimensionRepository dateDimensionRepository;
     private final DailyRevenuePaymentBreakdownRepository dailyRevenuePaymentBreakdownRepository;
     private final StoreRepository storeRepository;
+    private final CoffeeSalesHourlyRepository coffeeSalesHourlyRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -586,10 +588,11 @@ public class KpiService {
                 currentFacts, effectiveFrom, effectiveTo, granularity, mult);
 
         // 9. Product aggregates (current + previous)
-        List<ProductAggregate> currProducts = fetchProductAggregates(
-                dataStoreId, effectiveFrom, effectiveTo, mult);
-        List<ProductAggregate> prevProducts = fetchProductAggregates(
-                dataStoreId, prevFrom, prevTo, mult);
+        String storeCode = storeRepository.findById(dataStoreId)
+                .map(Store::getCode)
+                .orElseThrow(() -> new RuntimeException("Store not found: " + dataStoreId));
+        List<ProductAggregate> currProducts = fetchProductAggregates(storeCode, effectiveFrom, effectiveTo, mult);
+        List<ProductAggregate> prevProducts = fetchProductAggregates(storeCode, prevFrom, prevTo, mult);
         Map<String, Double> prevRevByProduct = prevProducts.stream()
                 .collect(Collectors.toMap(ProductAggregate::productName, ProductAggregate::revenue));
 
@@ -642,11 +645,11 @@ public class KpiService {
     // -- private helpers for getStatistics ------------------------------------
 
     /** Fetch and aggregate product data over a date range, applying the revenue multiplier. */
-    private List<ProductAggregate> fetchProductAggregates(Long dataStoreId,
+    private List<ProductAggregate> fetchProductAggregates(String storeCode,
                                                            LocalDate start, LocalDate end,
                                                            double mult) {
-        List<Object[]> rows = factKpiProductDailyRepository
-                .aggregateByStoreIdAndDateRange(dataStoreId, start, end);
+        List<Object[]> rows = coffeeSalesHourlyRepository
+                .aggregateByStoreCodeAndDateRange(storeCode, start, end);
         List<ProductAggregate> result = new ArrayList<>();
         for (Object[] row : rows) {
             String name = (String) row[0];
