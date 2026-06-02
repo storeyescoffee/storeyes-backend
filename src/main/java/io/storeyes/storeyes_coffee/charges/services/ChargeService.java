@@ -716,22 +716,6 @@ public class ChargeService {
         variableChargeRepository.deleteById(id);
     }
 
-    /**
-     * Delete all variable charges linked to a supplier order (identified by the notes marker
-     * "supplier_order:<orderId>"). Also removes the associated stock movements.
-     * Called before deleting a converted supplier order so inventory stays consistent.
-     */
-    @Transactional
-    public void deleteVariableChargesForSupplierOrder(Long orderId) {
-        Long storeId = getChargesDataStoreId();
-        String notesMarker = "supplier_order:" + orderId;
-        List<VariableCharge> linked = variableChargeRepository.findByStoreIdAndNotes(storeId, notesMarker);
-        for (VariableCharge charge : linked) {
-            stockMovementService.deleteMovementsForVariableCharge(charge.getId());
-            variableChargeRepository.deleteById(charge.getId());
-        }
-    }
-
     // ==================== Variable Charge Main Categories ====================
 
     /**
