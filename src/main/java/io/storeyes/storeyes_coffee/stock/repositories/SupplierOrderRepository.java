@@ -2,6 +2,7 @@ package io.storeyes.storeyes_coffee.stock.repositories;
 
 import io.storeyes.storeyes_coffee.stock.entities.SupplierOrder;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,6 +21,16 @@ public interface SupplierOrderRepository extends JpaRepository<SupplierOrder, Lo
     Optional<SupplierOrder> findFetchedByIdAndStoreId(@Param("id") Long id, @Param("storeId") Long storeId);
 
     Optional<SupplierOrder> findByIdAndStore_Id(Long id, Long storeId);
+
+    /**
+     * Native delete so the DB's ON DELETE CASCADE handles supplier_order_lines.
+     * flushAutomatically: flush pending JPA changes (variable charge deletions) to DB first.
+     * clearAutomatically: clear the L1 cache after so Hibernate doesn't try to flush
+     * the stale cached SupplierOrder entity at commit and throw a StaleStateException.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "DELETE FROM supplier_orders WHERE id = :id", nativeQuery = true)
+    void deleteNative(@Param("id") Long id);
 
     @Query(
             value = """

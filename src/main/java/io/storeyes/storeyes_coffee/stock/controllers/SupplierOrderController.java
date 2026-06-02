@@ -81,6 +81,8 @@ public class SupplierOrderController {
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return badRequest(e.getMessage());
+        } catch (Exception e) {
+            return badRequest("Delete failed: " + e.getClass().getSimpleName() + " — " + e.getMessage());
         }
     }
 

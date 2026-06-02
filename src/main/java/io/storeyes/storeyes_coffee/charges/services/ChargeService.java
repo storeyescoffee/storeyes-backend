@@ -717,9 +717,10 @@ public class ChargeService {
     }
 
     /**
-     * Delete all variable charges linked to a supplier order (identified by the notes marker
-     * "supplier_order:<orderId>"). Also removes the associated stock movements.
-     * Called before deleting a converted supplier order so inventory stays consistent.
+     * Delete all variable charges linked to a supplier order, identified by the
+     * notes marker "supplier_order:<orderId>". Uses getChargesDataStoreId() — the
+     * same store context used when the charges were created — so the lookup is correct
+     * even when the charges data store differs from the current store context.
      */
     @Transactional
     public void deleteVariableChargesForSupplierOrder(Long orderId) {
