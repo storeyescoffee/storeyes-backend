@@ -308,9 +308,17 @@ public class ChargeController {
      * DELETE /api/charges/variable/by-supplier-order/{orderId}
      */
     @DeleteMapping("/variable/by-supplier-order/{orderId}")
-    public ResponseEntity<Void> deleteVariableChargesForSupplierOrder(@PathVariable Long orderId) {
-        chargeService.deleteVariableChargesForSupplierOrder(orderId);
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    public ResponseEntity<Map<String, Object>> deleteVariableChargesForSupplierOrder(@PathVariable Long orderId) {
+        try {
+            chargeService.deleteVariableChargesForSupplierOrder(orderId);
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+        } catch (Exception e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Bad Request");
+            err.put("message", "Charge cleanup failed: " + e.getClass().getSimpleName() + " — " + e.getMessage());
+            err.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
     }
 
     // ==================== Variable Charge Main Categories ====================
