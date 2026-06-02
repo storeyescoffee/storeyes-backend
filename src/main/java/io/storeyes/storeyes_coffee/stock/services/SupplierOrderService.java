@@ -2,9 +2,7 @@ package io.storeyes.storeyes_coffee.stock.services;
 
 import io.storeyes.storeyes_coffee.charges.dto.VariableChargeCreateRequest;
 import io.storeyes.storeyes_coffee.charges.entities.VariableChargeMainCategory;
-import io.storeyes.storeyes_coffee.charges.entities.VariableCharge;
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeMainCategoryRepository;
-import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeRepository;
 import io.storeyes.storeyes_coffee.charges.services.ChargeService;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.dto.*;
@@ -44,8 +42,6 @@ public class SupplierOrderService {
     private final SupplierRepository supplierRepository;
     private final StockProductRepository stockProductRepository;
     private final VariableChargeMainCategoryRepository variableChargeMainCategoryRepository;
-    private final VariableChargeRepository variableChargeRepository;
-    private final StockMovementService stockMovementService;
     private final ChargeService chargeService;
 
     private Long getStoreId() {
@@ -225,20 +221,11 @@ public class SupplierOrderService {
     @Transactional
     public void delete(Long id) {
         Long storeId = getStoreId();
-        SupplierOrder order = supplierOrderRepository.findByIdAndStore_Id(id, storeId)
+        supplierOrderRepository.findByIdAndStore_Id(id, storeId)
                 .orElseThrow(() -> new IllegalArgumentException("Supplier order not found"));
-        // For converted orders, delete the linked variable charges (and their stock movements)
-        // using the same store ID so the lookup is consistent with this service's auth context.
-        if (order.getConvertedAt() != null) {
-            String notesMarker = "supplier_order:" + id;
-            List<VariableCharge> linked = variableChargeRepository.findByStoreIdAndNotes(storeId, notesMarker);
-            for (VariableCharge charge : linked) {
-                stockMovementService.deleteMovementsForVariableCharge(charge.getId());
-                variableChargeRepository.deleteVariableChargeById(charge.getId());
-            }
-        }
-        // Native SQL delete — lets the DB's ON DELETE CASCADE handle supplier_order_lines,
-        // bypassing Hibernate's orphanRemoval which can fail on uninitialized lazy collections.
+        // Native SQL delete — lets the DB's ON DELETE CASCADE handle supplier_order_lines.
+        // Variable charges are cleaned up beforehand by the frontend via
+        // DELETE /api/charges/variable/by-supplier-order/{orderId}.
         supplierOrderRepository.deleteNative(id);
     }
 

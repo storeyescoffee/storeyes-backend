@@ -302,6 +302,17 @@ public class ChargeController {
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 
+    /**
+     * Delete all variable charges linked to a supplier order.
+     * Called by the mobile app before deleting the supplier order itself.
+     * DELETE /api/charges/variable/by-supplier-order/{orderId}
+     */
+    @DeleteMapping("/variable/by-supplier-order/{orderId}")
+    public ResponseEntity<Void> deleteVariableChargesForSupplierOrder(@PathVariable Long orderId) {
+        chargeService.deleteVariableChargesForSupplierOrder(orderId);
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
     // ==================== Variable Charge Main Categories ====================
 
     /**
