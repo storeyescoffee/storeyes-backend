@@ -302,25 +302,6 @@ public class ChargeController {
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 
-    /**
-     * Delete all variable charges linked to a supplier order.
-     * Called by the mobile app before deleting the supplier order itself.
-     * DELETE /api/charges/variable/by-supplier-order/{orderId}
-     */
-    @DeleteMapping("/supplier-order/{orderId}/variable-charges")
-    public ResponseEntity<?> deleteVariableChargesForSupplierOrder(@PathVariable Long orderId) {
-        try {
-            chargeService.deleteVariableChargesForSupplierOrder(orderId);
-            return ResponseEntity.noContent().build();
-        } catch (Exception e) {
-            Map<String, Object> err = new HashMap<>();
-            err.put("error", "Bad Request");
-            err.put("message", "Charge cleanup failed: " + e.getClass().getSimpleName() + " — " + e.getMessage());
-            err.put("timestamp", java.time.OffsetDateTime.now());
-            return ResponseEntity.badRequest().body(err);
-        }
-    }
-
     // ==================== Variable Charge Main Categories ====================
 
     /**

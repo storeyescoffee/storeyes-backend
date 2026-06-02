@@ -221,11 +221,16 @@ public class SupplierOrderService {
     @Transactional
     public void delete(Long id) {
         Long storeId = getStoreId();
-        supplierOrderRepository.findByIdAndStore_Id(id, storeId)
+        SupplierOrder order = supplierOrderRepository.findByIdAndStore_Id(id, storeId)
                 .orElseThrow(() -> new IllegalArgumentException("Supplier order not found"));
-        // Native SQL delete — lets the DB's ON DELETE CASCADE handle supplier_order_lines.
-        // Variable charges are cleaned up beforehand by the frontend via
-        // DELETE /api/charges/variable/by-supplier-order/{orderId}.
+        // If converted, remove linked variable charges using ChargeService which resolves
+        // the correct charges-data store ID (same context used when charges were created).
+        if (order.getConvertedAt() != null) {
+            chargeService.deleteVariableChargesForSupplierOrder(id);
+        }
+        // Native delete bypasses Hibernate orphanRemoval; DB CASCADE handles the lines.
+        // flushAutomatically flushes pending charge deletions before the native SQL runs.
+        // clearAutomatically evicts the stale SupplierOrder from L1 cache so commit is clean.
         supplierOrderRepository.deleteNative(id);
     }
 
