@@ -47,6 +47,7 @@ public interface FactKpiProductDailyRepository extends JpaRepository<FactKpiProd
               AND d.date >= :startDate
               AND d.date <= :endDate
             GROUP BY p.productName
+            HAVING SUM(p.revenue) > 0
             """)
     List<Object[]> aggregateByStoreIdAndDateRange(
             @Param("storeId") Long storeId,
