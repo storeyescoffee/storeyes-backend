@@ -307,7 +307,7 @@ public class ChargeController {
      * Called by the mobile app before deleting the supplier order itself.
      * DELETE /api/charges/variable/by-supplier-order/{orderId}
      */
-    @DeleteMapping("/variable/by-supplier-order/{orderId}")
+    @DeleteMapping("/supplier-order/{orderId}/variable-charges")
     public ResponseEntity<Map<String, Object>> deleteVariableChargesForSupplierOrder(@PathVariable Long orderId) {
         try {
             chargeService.deleteVariableChargesForSupplierOrder(orderId);
