@@ -308,16 +308,16 @@ public class ChargeController {
      * DELETE /api/charges/variable/by-supplier-order/{orderId}
      */
     @DeleteMapping("/supplier-order/{orderId}/variable-charges")
-    public ResponseEntity<Map<String, Object>> deleteVariableChargesForSupplierOrder(@PathVariable Long orderId) {
+    public ResponseEntity<?> deleteVariableChargesForSupplierOrder(@PathVariable Long orderId) {
         try {
             chargeService.deleteVariableChargesForSupplierOrder(orderId);
-            return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+            return ResponseEntity.noContent().build();
         } catch (Exception e) {
             Map<String, Object> err = new HashMap<>();
             err.put("error", "Bad Request");
             err.put("message", "Charge cleanup failed: " + e.getClass().getSimpleName() + " — " + e.getMessage());
             err.put("timestamp", java.time.OffsetDateTime.now());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+            return ResponseEntity.badRequest().body(err);
         }
     }
 
