@@ -11,10 +11,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class FeedbackItemDTO {
     private Long id;
-    private int stars;
+    /** "GOOD" or "BAD" */
+    private String rating;
     private String comment;
-    /** "positive" | "negative" | "neutral" */
-    private String type;
     /** ISO-8601 string, e.g. "2026-05-24T14:32:00" */
     private String submittedAt;
 }

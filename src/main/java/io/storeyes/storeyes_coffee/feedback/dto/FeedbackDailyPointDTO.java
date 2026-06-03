@@ -12,7 +12,6 @@ import lombok.NoArgsConstructor;
 public class FeedbackDailyPointDTO {
     /** Day-of-month label, e.g. "1", "15", "31" */
     private String label;
-    private int pos;
-    private int neg;
-    private int neu;
+    private int pos;   // GOOD count
+    private int neg;   // BAD count
 }

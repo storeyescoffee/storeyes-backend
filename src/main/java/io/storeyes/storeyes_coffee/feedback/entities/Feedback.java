@@ -30,9 +30,10 @@ public class Feedback {
     @JsonIgnoreProperties({"feedbacks"})
     private Store store;
 
-    /** Star rating: 1–5 */
-    @Column(name = "stars", nullable = false)
-    private Integer stars;
+    /** Boolean rating: GOOD or BAD */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rating", nullable = false, length = 10)
+    private FeedbackRating rating;
 
     /** Optional free-text comment from the customer */
     @Column(name = "comment", length = 2048)
