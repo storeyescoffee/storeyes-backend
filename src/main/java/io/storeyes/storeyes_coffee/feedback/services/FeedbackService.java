@@ -1,11 +1,17 @@
 package io.storeyes.storeyes_coffee.feedback.services;
 
+import io.storeyes.storeyes_coffee.feedback.dto.FeedbackCreateRequest;
 import io.storeyes.storeyes_coffee.feedback.dto.FeedbackDailyPointDTO;
 import io.storeyes.storeyes_coffee.feedback.dto.FeedbackItemDTO;
+import io.storeyes.storeyes_coffee.feedback.dto.FeedbackPatchRequest;
+import io.storeyes.storeyes_coffee.feedback.dto.FeedbackProfileDTO;
 import io.storeyes.storeyes_coffee.feedback.dto.FeedbackStatsResponse;
 import io.storeyes.storeyes_coffee.feedback.dto.FeedbackSubmitRequest;
 import io.storeyes.storeyes_coffee.feedback.entities.Feedback;
+import io.storeyes.storeyes_coffee.feedback.entities.FeedbackLanguage;
 import io.storeyes.storeyes_coffee.feedback.entities.FeedbackRating;
+import io.storeyes.storeyes_coffee.feedback.entities.FeedbackProfile;
+import io.storeyes.storeyes_coffee.feedback.repositories.FeedbackProfileRepository;
 import io.storeyes.storeyes_coffee.feedback.repositories.FeedbackRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
@@ -23,9 +29,14 @@ import java.util.stream.Collectors;
 public class FeedbackService {
 
     private final FeedbackRepository feedbackRepository;
-    private final StoreRepository    storeRepository;
+    private final StoreRepository storeRepository;
+    private final FeedbackProfileRepository feedbackProfileRepository;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+
+    public boolean hasFeedbackProfile(Long storeId) {
+        return feedbackProfileRepository.findByStoreId(storeId).isPresent();
+    }
 
     public FeedbackStatsResponse getStats(Long storeId, String from, String to) {
         LocalDateTime fromDt = LocalDate.parse(from).atStartOfDay();
@@ -67,8 +78,22 @@ public class FeedbackService {
                         .rating(f.getRating().name())
                         .comment(f.getComment())
                         .submittedAt(f.getSubmittedAt().format(ISO))
+                        .isVisiting(f.isVisiting())
+                        .isMobile(f.isMobile())
+                        .language(f.getLanguage() != null ? f.getLanguage().name() : null)
                         .build())
                 .collect(Collectors.toList());
+
+        FeedbackProfileDTO profile = feedbackProfileRepository.findByStoreId(storeId)
+                .map(p -> FeedbackProfileDTO.builder()
+                        .id(p.getId())
+                        .storeId(p.getStore().getId())
+                        .code(p.getCode())
+                        .storeName(p.getStoreName())
+                        .logoUrl(p.getLogoUrl())
+                        .googleReviewUrl(p.getGoogleReviewUrl())
+                        .build())
+                .orElse(null);
 
         return FeedbackStatsResponse.builder()
                 .total(total)
@@ -77,7 +102,37 @@ public class FeedbackService {
                 .satisfactionPct(satisfactionPct)
                 .daily(daily)
                 .reviews(reviews)
+                .profile(profile)
                 .build();
+    }
+
+    public String create(FeedbackCreateRequest request) {
+        FeedbackProfile profile = feedbackProfileRepository.findByCode(request.getFeedbackProfileCode())
+                .orElseThrow(() -> new RuntimeException("FeedbackProfile not found: " + request.getFeedbackProfileCode()));
+        Store store = profile.getStore();
+
+        Feedback feedback = Feedback.builder()
+                .store(store)
+                .rating(FeedbackRating.valueOf(request.getRating()))
+                .language(FeedbackLanguage.valueOf(request.getLanguage()))
+                .isMobile(request.getIsMobile())
+                .build();
+
+        return String.valueOf(feedbackRepository.save(feedback).getId());
+    }
+
+    public void patch(Long id, FeedbackPatchRequest request) {
+        Feedback feedback = feedbackRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Feedback not found: " + id));
+
+        if (request.getComment() != null) {
+            feedback.setComment(request.getComment());
+        }
+        if (request.getIsVisiting() != null) {
+            feedback.setVisiting(request.getIsVisiting());
+        }
+
+        feedbackRepository.save(feedback);
     }
 
     public void submit(FeedbackSubmitRequest request) {
@@ -88,6 +143,8 @@ public class FeedbackService {
                 .store(store)
                 .rating(FeedbackRating.valueOf(request.getRating()))
                 .comment(request.getComment())
+                .isVisiting(request.isVisiting())
+                .language(request.getLanguage() != null ? FeedbackLanguage.valueOf(request.getLanguage()) : null)
                 .build();
 
         feedbackRepository.save(feedback);

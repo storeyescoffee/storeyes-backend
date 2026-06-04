@@ -6,24 +6,19 @@ import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
-public class FeedbackSubmitRequest {
+public class FeedbackCreateRequest {
 
-    /** The store's short code, e.g. "tachfine" */
     @NotBlank
-    private String storeCode;
+    private String feedbackProfileCode;
 
-    /** Must be "GOOD" or "BAD" */
     @NotNull
     @Pattern(regexp = "GOOD|BAD", message = "rating must be GOOD or BAD")
     private String rating;
 
-    /** Optional free-text comment (max 2048 chars) */
-    private String comment;
-
-    /** True if the customer is visiting/tourist, false if regular */
-    private boolean isVisiting;
-
-    /** Language: AR, FR, or EN */
+    @NotNull
     @Pattern(regexp = "AR|FR|EN", message = "language must be AR, FR, or EN")
     private String language;
+
+    @NotNull
+    private Boolean isMobile;
 }

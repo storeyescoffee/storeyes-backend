@@ -18,4 +18,5 @@ public class FeedbackStatsResponse {
     private int satisfactionPct;  // pos * 100 / total  (0 when total == 0)
     private List<FeedbackDailyPointDTO> daily;
     private List<FeedbackItemDTO> reviews;
+    private FeedbackProfileDTO profile;
 }

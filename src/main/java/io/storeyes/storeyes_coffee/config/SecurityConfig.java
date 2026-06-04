@@ -111,6 +111,9 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/sales/process").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/feedback").permitAll()
+                .requestMatchers(HttpMethod.PATCH, "/api/feedback/*").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/feedback-profiles/*").permitAll()
 
                 // Actuator health endpoint - public for load balancer / uptime checks
                 .requestMatchers("/actuator/health").permitAll()

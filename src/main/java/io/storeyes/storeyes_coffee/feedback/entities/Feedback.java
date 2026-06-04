@@ -39,6 +39,19 @@ public class Feedback {
     @Column(name = "comment", length = 2048)
     private String comment;
 
+    /** True if the customer is a visiting/tourist customer, false if regular */
+    @Column(name = "is_visiting", nullable = false)
+    private boolean isVisiting;
+
+    /** True if the feedback was submitted from a mobile device */
+    @Column(name = "is_mobile", nullable = false)
+    private boolean isMobile;
+
+    /** Language used by the customer: AR, FR, or EN */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "language", length = 2)
+    private FeedbackLanguage language;
+
     /** When the customer submitted the feedback (set automatically) */
     @Column(name = "submitted_at", nullable = false, updatable = false)
     @CreationTimestamp
