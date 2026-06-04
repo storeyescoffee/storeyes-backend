@@ -37,7 +37,7 @@ public class FeedbackProfile {
     @Column(name = "logo_url")
     private String logoUrl;
 
-    @Column(name = "google_review_url", nullable = false)
+    @Column(name = "google_review_url", nullable = false, length = 2048)
     private String googleReviewUrl;
 
     @Column(name = "created_at", nullable = false, updatable = false)
