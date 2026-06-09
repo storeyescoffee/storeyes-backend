@@ -366,6 +366,8 @@ public class StockMovementService {
                             .unit(product.getUnit())
                             .subCategoryId(product.getSubCategory() != null ? product.getSubCategory().getId() : null)
                             .subCategoryName(product.getSubCategory() != null ? product.getSubCategory().getName() : null)
+                            .parentSubCategoryId(product.getSubCategory() != null && product.getSubCategory().getParentSubCategory() != null
+                                    ? product.getSubCategory().getParentSubCategory().getId() : null)
                             .countingUnit(product.getCountingUnit())
                             .basePerCountingUnit(basePerCounting)
                             .minimalThreshold(product.getMinimalThreshold())

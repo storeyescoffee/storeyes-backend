@@ -23,6 +23,7 @@ public class StockInventoryItemResponse {
     private String unit;
     private Long subCategoryId;
     private String subCategoryName;
+    private Long parentSubCategoryId;
     /** Base unit (g, cl, ml, piece). Match mobile unit mapping. */
     private String countingUnit;
     /** Conversion: 1 counting unit = basePerCountingUnit base units. Null when no counting unit. */

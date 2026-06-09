@@ -835,6 +835,30 @@ public class ChargeService {
     }
 
     /**
+     * Create a child sub-category under an existing sub-category (e.g. add "Pastry" under "Raw materials").
+     * POST /api/charges/variable/sub-categories
+     */
+    @Transactional
+    public VariableChargeSubCategoryResponse createVariableChargeSubCategory(CreateVariableChargeSubCategoryRequest request) {
+        Long storeId = getChargesDataStoreId();
+        VariableChargeSubCategory parent = variableChargeSubCategoryRepository.findById(request.getParentSubCategoryId())
+                .orElseThrow(() -> new RuntimeException("Parent sub-category not found with id: " + request.getParentSubCategoryId()));
+        if (!parent.getMainCategory().getStore().getId().equals(storeId)) {
+            throw new RuntimeException("Parent sub-category not found with id: " + request.getParentSubCategoryId());
+        }
+
+        VariableChargeSubCategory sub = VariableChargeSubCategory.builder()
+                .mainCategory(parent.getMainCategory())
+                .parentSubCategory(parent)
+                .name(request.getName().trim())
+                .code(request.getCode() != null && !request.getCode().isBlank() ? request.getCode().trim() : null)
+                .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0)
+                .build();
+
+        return toVariableChargeSubCategoryResponse(variableChargeSubCategoryRepository.save(sub));
+    }
+
+    /**
      * Get direct sub-categories of a main category (e.g. for Stock: Raw materials, Hygiene, Packaging, Cash register).
      * GET /api/charges/variable/main-categories/{mainCategoryId}/sub-categories
      */
