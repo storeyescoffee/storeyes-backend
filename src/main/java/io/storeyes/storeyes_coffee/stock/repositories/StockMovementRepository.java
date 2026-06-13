@@ -3,6 +3,7 @@ package io.storeyes.storeyes_coffee.stock.repositories;
 import io.storeyes.storeyes_coffee.stock.entities.StockMovement;
 import io.storeyes.storeyes_coffee.stock.entities.StockMovementType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -27,6 +28,10 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     Optional<StockMovement> findByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
 
     void deleteByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
+
+    @Modifying
+    @Query("DELETE FROM StockMovement m WHERE m.product.id = :productId")
+    void deleteAllByProductId(@Param("productId") Long productId);
 
     /**
      * Average cost per base unit for a stock product (from PURCHASE and ADJUSTMENT movements).

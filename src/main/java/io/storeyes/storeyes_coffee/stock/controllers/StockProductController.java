@@ -92,4 +92,18 @@ public class StockProductController {
         stockProductService.deleteProduct(id);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
+
+    /**
+     * Reset stock history for a product (movements + snapshots).
+     * The product record itself is preserved.
+     * DELETE /api/stock/products/{id}/reset
+     */
+    @DeleteMapping("/{id}/reset")
+    public ResponseEntity<Map<String, Object>> resetProductStock(@PathVariable Long id) {
+        stockProductService.resetProductStock(id);
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Stock history reset successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.ok(response);
+    }
 }

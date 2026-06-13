@@ -10,6 +10,8 @@ import io.storeyes.storeyes_coffee.stock.dto.UpdateStockProductRequest;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.stock.entities.SupplierStockProduct;
 import io.storeyes.storeyes_coffee.stock.repositories.RecipeIngredientRepository;
+import io.storeyes.storeyes_coffee.stock.repositories.StockInventorySnapshotRepository;
+import io.storeyes.storeyes_coffee.stock.repositories.StockMovementRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.SupplierStockProductRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
@@ -36,6 +38,8 @@ public class StockProductService {
     private final StoreRepository storeRepository;
     private final SupplierStockProductRepository supplierStockProductRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
+    private final StockMovementRepository stockMovementRepository;
+    private final StockInventorySnapshotRepository stockInventorySnapshotRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
 
     private Long getStoreId() {
@@ -202,6 +206,24 @@ public class StockProductService {
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId =
                 loadSuppliersByProductId(storeId, List.of(updated.getId()));
         return toResponse(updated, suppliersByProductId.getOrDefault(updated.getId(), List.of()));
+    }
+
+    /**
+     * Reset stock history for a product: deletes all movements and inventory snapshots.
+     * The product itself and its metadata (name, unit price, category) are kept.
+     * After reset, realValue/realQuantity return to null and estimatedValue falls back
+     * to the average purchase price derived from future movements only.
+     */
+    @Transactional
+    public void resetProductStock(Long id) {
+        Long storeId = getStoreId();
+        StockProduct product = stockProductRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Stock product not found with id: " + id));
+        if (!product.getStore().getId().equals(storeId)) {
+            throw new RuntimeException("Stock product not found with id: " + id);
+        }
+        stockInventorySnapshotRepository.deleteAllByProductId(id);
+        stockMovementRepository.deleteAllByProductId(id);
     }
 
     /**

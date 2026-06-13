@@ -2,6 +2,7 @@ package io.storeyes.storeyes_coffee.stock.repositories;
 
 import io.storeyes.storeyes_coffee.stock.entities.StockInventorySnapshot;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -48,4 +49,8 @@ public interface StockInventorySnapshotRepository extends JpaRepository<StockInv
             WHERE s.id IN :ids
             """)
     List<StockInventorySnapshot> findByIdInWithProductAndSubCategory(@Param("ids") Collection<Long> ids);
+
+    @Modifying
+    @Query("DELETE FROM StockInventorySnapshot s WHERE s.product.id = :productId")
+    void deleteAllByProductId(@Param("productId") Long productId);
 }
