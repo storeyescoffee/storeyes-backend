@@ -50,8 +50,19 @@ public class FeedbackQuestionService {
         return toDTO(questionRepository.save(question));
     }
 
+    /**
+     * Updates labels and/or active state.
+     * If displayOrder changed, re-inserts the question at the requested position
+     * and renumbers all questions 1…N — so there are never gaps or duplicates.
+     *
+     * Move scenarios handled automatically:
+     *   move forward  (e.g. 2 → 4): questions between shift up by one
+     *   move backward (e.g. 4 → 1): questions between shift down by one
+     *   same position: no-op resequence
+     *   out-of-range  (e.g. 99): clamped to last position
+     */
     @Transactional
-    public FeedbackQuestionDTO update(Long questionId, FeedbackQuestionUpdateRequest request) {
+    public FeedbackQuestionDTO update(Long profileId, Long questionId, FeedbackQuestionUpdateRequest request) {
         FeedbackQuestion question = findById(questionId);
 
         if (request.getLabelAr() != null && !request.getLabelAr().isBlank()) {
@@ -63,14 +74,19 @@ public class FeedbackQuestionService {
         if (request.getLabelEn() != null && !request.getLabelEn().isBlank()) {
             question.setLabelEn(request.getLabelEn());
         }
-        if (request.getDisplayOrder() != null) {
-            question.setDisplayOrder(request.getDisplayOrder());
-        }
         if (request.getIsActive() != null) {
             question.setActive(request.getIsActive());
         }
 
-        return toDTO(questionRepository.save(question));
+        // Save label / active changes first
+        questionRepository.save(question);
+
+        // Then resequence if order changed
+        if (request.getDisplayOrder() != null) {
+            resequenceForMove(profileId, questionId, request.getDisplayOrder());
+        }
+
+        return toDTO(findById(questionId));
     }
 
     @Transactional
@@ -79,7 +95,39 @@ public class FeedbackQuestionService {
         resequence(profileId);
     }
 
-    /** Reassigns displayOrder 1…N based on current sort to close gaps after a deletion. */
+    // ── Private helpers ──────────────────────────────────────────
+
+    /**
+     * Re-inserts the target question at {@code targetOrder} within the profile's
+     * ordered list, then renumbers all questions 1…N.
+     *
+     * Algorithm (list-manipulation, no conditional branches needed):
+     *   1. Sort all questions by current displayOrder.
+     *   2. Remove the moved question from the list.
+     *   3. Insert it at index (targetOrder - 1), clamped to [0, size].
+     *   4. Assign displayOrder = index + 1 to every element and save.
+     */
+    private void resequenceForMove(Long profileId, Long movedQuestionId, int targetOrder) {
+        List<FeedbackQuestion> questions = questionRepository
+                .findByFeedbackProfileIdOrderByDisplayOrderAsc(profileId);
+
+        FeedbackQuestion moved = questions.stream()
+                .filter(q -> q.getId().equals(movedQuestionId))
+                .findFirst()
+                .orElseThrow();
+
+        questions.remove(moved);
+
+        int insertIndex = Math.max(0, Math.min(targetOrder - 1, questions.size()));
+        questions.add(insertIndex, moved);
+
+        for (int i = 0; i < questions.size(); i++) {
+            questions.get(i).setDisplayOrder(i + 1);
+        }
+        questionRepository.saveAll(questions);
+    }
+
+    /** Renumbers remaining questions 1…N after a deletion. */
     private void resequence(Long profileId) {
         List<FeedbackQuestion> remaining = questionRepository
                 .findByFeedbackProfileIdOrderByDisplayOrderAsc(profileId);

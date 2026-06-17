@@ -39,7 +39,7 @@ public class FeedbackQuestionController {
             @PathVariable Long profileId,
             @PathVariable Long questionId,
             @RequestBody FeedbackQuestionUpdateRequest request) {
-        return ResponseEntity.ok(questionService.update(questionId, request));
+        return ResponseEntity.ok(questionService.update(profileId, questionId, request));
     }
 
     /** DELETE /api/feedback-profiles/{profileId}/questions/{questionId} */
