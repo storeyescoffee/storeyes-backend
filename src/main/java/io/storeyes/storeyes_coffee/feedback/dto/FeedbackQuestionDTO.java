@@ -16,5 +16,5 @@ public class FeedbackQuestionDTO {
     private String labelFr;
     private String labelEn;
     private int displayOrder;
-    private boolean isActive;
+    private Boolean isActive;
 }

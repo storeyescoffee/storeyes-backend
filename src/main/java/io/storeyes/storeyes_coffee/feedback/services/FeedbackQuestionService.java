@@ -9,6 +9,7 @@ import io.storeyes.storeyes_coffee.feedback.repositories.FeedbackProfileReposito
 import io.storeyes.storeyes_coffee.feedback.repositories.FeedbackQuestionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,22 +29,28 @@ public class FeedbackQuestionService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
     public FeedbackQuestionDTO create(Long profileId, FeedbackQuestionCreateRequest request) {
         FeedbackProfile profile = profileRepository.findById(profileId)
                 .orElseThrow(() -> new RuntimeException("FeedbackProfile not found: " + profileId));
+
+        int nextOrder = questionRepository
+                .findByFeedbackProfileIdOrderByDisplayOrderAsc(profileId)
+                .size() + 1;
 
         FeedbackQuestion question = FeedbackQuestion.builder()
                 .feedbackProfile(profile)
                 .labelAr(request.getLabelAr())
                 .labelFr(request.getLabelFr())
                 .labelEn(request.getLabelEn())
-                .displayOrder(request.getDisplayOrder())
+                .displayOrder(nextOrder)
                 .isActive(true)
                 .build();
 
         return toDTO(questionRepository.save(question));
     }
 
+    @Transactional
     public FeedbackQuestionDTO update(Long questionId, FeedbackQuestionUpdateRequest request) {
         FeedbackQuestion question = findById(questionId);
 
@@ -66,8 +73,20 @@ public class FeedbackQuestionService {
         return toDTO(questionRepository.save(question));
     }
 
-    public void delete(Long questionId) {
+    @Transactional
+    public void delete(Long profileId, Long questionId) {
         questionRepository.delete(findById(questionId));
+        resequence(profileId);
+    }
+
+    /** Reassigns displayOrder 1…N based on current sort to close gaps after a deletion. */
+    private void resequence(Long profileId) {
+        List<FeedbackQuestion> remaining = questionRepository
+                .findByFeedbackProfileIdOrderByDisplayOrderAsc(profileId);
+        for (int i = 0; i < remaining.size(); i++) {
+            remaining.get(i).setDisplayOrder(i + 1);
+        }
+        questionRepository.saveAll(remaining);
     }
 
     private FeedbackQuestion findById(Long id) {

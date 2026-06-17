@@ -47,7 +47,7 @@ public class FeedbackQuestionController {
     public ResponseEntity<Void> delete(
             @PathVariable Long profileId,
             @PathVariable Long questionId) {
-        questionService.delete(questionId);
+        questionService.delete(profileId, questionId);
         return ResponseEntity.noContent().build();
     }
 }
