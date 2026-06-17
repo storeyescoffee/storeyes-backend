@@ -18,8 +18,8 @@ public class FeedbackItemDTO {
     private String comment;
     /** ISO-8601 string, e.g. "2026-05-24T14:32:00" */
     private String submittedAt;
-    private boolean isVisiting;
-    private boolean isMobile;
+    private Boolean isVisiting;
+    private Boolean isMobile;
     /** "AR", "FR", or "EN" */
     private String language;
     private List<FeedbackAnswerItemDTO> answers;
