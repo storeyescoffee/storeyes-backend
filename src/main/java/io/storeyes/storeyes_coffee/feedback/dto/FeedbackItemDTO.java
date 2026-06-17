@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,4 +22,5 @@ public class FeedbackItemDTO {
     private boolean isMobile;
     /** "AR", "FR", or "EN" */
     private String language;
+    private List<FeedbackAnswerItemDTO> answers;
 }

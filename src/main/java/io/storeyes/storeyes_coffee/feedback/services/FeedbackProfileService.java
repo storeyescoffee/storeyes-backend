@@ -4,8 +4,10 @@ import io.storeyes.storeyes_coffee.documents.services.S3Service;
 import io.storeyes.storeyes_coffee.feedback.dto.FeedbackProfileCreateRequest;
 import io.storeyes.storeyes_coffee.feedback.dto.FeedbackProfileDTO;
 import io.storeyes.storeyes_coffee.feedback.dto.FeedbackProfileUpdateRequest;
+import io.storeyes.storeyes_coffee.feedback.dto.FeedbackQuestionDTO;
 import io.storeyes.storeyes_coffee.feedback.entities.FeedbackProfile;
 import io.storeyes.storeyes_coffee.feedback.repositories.FeedbackProfileRepository;
+import io.storeyes.storeyes_coffee.feedback.repositories.FeedbackQuestionRepository;
 import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,13 +28,23 @@ public class FeedbackProfileService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final FeedbackProfileRepository feedbackProfileRepository;
+    private final FeedbackQuestionRepository feedbackQuestionRepository;
     private final StoreRepository storeRepository;
     private final S3Service s3Service;
+    private final FeedbackQuestionService feedbackQuestionService;
 
+    /** Public endpoint — includes active questions so the kiosk loads in one request. */
     public FeedbackProfileDTO getByCode(String code) {
-        return feedbackProfileRepository.findByCode(code)
-                .map(this::toDTO)
+        FeedbackProfile profile = feedbackProfileRepository.findByCode(code)
                 .orElseThrow(() -> new RuntimeException("FeedbackProfile not found: " + code));
+
+        List<FeedbackQuestionDTO> questions = feedbackQuestionRepository
+                .findByFeedbackProfileIdAndIsActiveTrueOrderByDisplayOrderAsc(profile.getId())
+                .stream()
+                .map(feedbackQuestionService::toDTO)
+                .collect(Collectors.toList());
+
+        return toDTO(profile, questions);
     }
 
     @Transactional
@@ -55,7 +69,7 @@ public class FeedbackProfileService {
                 .googleReviewUrl(request.getGoogleReviewUrl())
                 .build();
 
-        return toDTO(feedbackProfileRepository.save(profile));
+        return toDTO(feedbackProfileRepository.save(profile), null);
     }
 
     @Transactional
@@ -75,7 +89,7 @@ public class FeedbackProfileService {
             profile.setLogoUrl(s3Service.uploadFile(request.getLogo(), S3_FOLDER));
         }
 
-        return toDTO(feedbackProfileRepository.save(profile));
+        return toDTO(feedbackProfileRepository.save(profile), null);
     }
 
     @Transactional
@@ -104,7 +118,7 @@ public class FeedbackProfileService {
                 .orElseThrow(() -> new RuntimeException("FeedbackProfile not found: " + id));
     }
 
-    private FeedbackProfileDTO toDTO(FeedbackProfile p) {
+    private FeedbackProfileDTO toDTO(FeedbackProfile p, List<FeedbackQuestionDTO> questions) {
         return FeedbackProfileDTO.builder()
                 .id(p.getId())
                 .storeId(p.getStore().getId())
@@ -112,6 +126,7 @@ public class FeedbackProfileService {
                 .storeName(p.getStoreName())
                 .logoUrl(p.getLogoUrl())
                 .googleReviewUrl(p.getGoogleReviewUrl())
+                .questions(questions)
                 .build();
     }
 }

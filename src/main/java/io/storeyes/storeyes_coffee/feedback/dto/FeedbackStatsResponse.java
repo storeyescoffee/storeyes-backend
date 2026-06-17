@@ -19,4 +19,5 @@ public class FeedbackStatsResponse {
     private List<FeedbackDailyPointDTO> daily;
     private List<FeedbackItemDTO> reviews;
     private FeedbackProfileDTO profile;
+    private List<FeedbackQuestionStatsDTO> questionStats;
 }

@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -16,4 +18,6 @@ public class FeedbackProfileDTO {
     private String storeName;
     private String logoUrl;
     private String googleReviewUrl;
+    /** Active questions in display order — populated for the kiosk (getByCode), null elsewhere. */
+    private List<FeedbackQuestionDTO> questions;
 }
