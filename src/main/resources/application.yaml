@@ -104,7 +104,7 @@ server:
 
 firebase:
   service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:classpath:firebase-service-account.json}
-  enabled: ${FIREBASE_ENABLED:true}
+  enabled: ${FIREBASE_ENABLED:false}
 
 # AWS S3 Configuration
 aws:
