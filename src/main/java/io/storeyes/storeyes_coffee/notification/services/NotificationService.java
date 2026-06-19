@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -15,9 +16,14 @@ import java.util.Map;
 public class NotificationService {
 
     private final FirebaseToken2Repository firebaseToken2Repository;
-    private final FcmNotificationService fcmNotificationService;
+    private final Optional<FcmNotificationService> fcmNotificationService;
 
     public int send(SendNotificationRequest request) {
+        if (fcmNotificationService.isEmpty()) {
+            log.debug("FCM is disabled — skipping notification for storeId={}", request.getStoreId());
+            return 0;
+        }
+
         List<String> tokens = resolveTokens(request.getStoreId(), request.getRoles());
 
         if (tokens.isEmpty()) {
@@ -28,7 +34,7 @@ public class NotificationService {
         log.debug("Sending notification to {} token(s) — storeId={} roles={}",
                 tokens.size(), request.getStoreId(), request.getRoles());
 
-        return fcmNotificationService.sendToTokens(tokens, request.getTitle(), request.getBody(), Map.of());
+        return fcmNotificationService.get().sendToTokens(tokens, request.getTitle(), request.getBody(), Map.of());
     }
 
     private List<String> resolveTokens(Long storeId, List<String> roles) {
