@@ -38,4 +38,7 @@ docs/
 # dev env
 **/application-dev.yaml
 
+# secrets — never commit service account keys
+**/firebase-service-account.json
+
 .claude

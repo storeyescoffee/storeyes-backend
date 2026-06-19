@@ -4,9 +4,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
@@ -74,6 +77,24 @@ public class S3Service {
         }
     }
     
+    /**
+     * Fetch raw bytes of a file from S3 by its URL
+     */
+    public byte[] fetchBytes(String url) {
+        try {
+            String key = extractKeyFromUrl(url);
+            GetObjectRequest request = GetObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build();
+            ResponseBytes<GetObjectResponse> response = s3Client.getObjectAsBytes(request);
+            return response.asByteArray();
+        } catch (S3Exception e) {
+            log.error("S3 error while fetching file bytes", e);
+            throw new RuntimeException("S3 error: " + e.getMessage(), e);
+        }
+    }
+
     /**
      * Delete a file from S3
      * @param url The S3 URL of the file to delete

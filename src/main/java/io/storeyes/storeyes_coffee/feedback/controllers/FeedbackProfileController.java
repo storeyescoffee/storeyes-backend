@@ -6,6 +6,7 @@ import io.storeyes.storeyes_coffee.feedback.dto.FeedbackProfileUpdateRequest;
 import io.storeyes.storeyes_coffee.feedback.services.FeedbackProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -36,6 +37,21 @@ public class FeedbackProfileController {
             @PathVariable Long id,
             @ModelAttribute FeedbackProfileUpdateRequest request) {
         return ResponseEntity.ok(feedbackProfileService.update(id, request));
+    }
+
+    /** GET /api/feedback-profiles/{id}/logo — proxies the S3 image to avoid browser CORS restrictions */
+    @GetMapping("/{id}/logo")
+    public ResponseEntity<byte[]> getLogo(@PathVariable Long id) {
+        try {
+            byte[] bytes = feedbackProfileService.getLogoBytes(id);
+            String contentType = feedbackProfileService.getLogoContentType(id);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.CONTENT_TYPE, contentType);
+            headers.set(HttpHeaders.CACHE_CONTROL, "public, max-age=3600");
+            return ResponseEntity.ok().headers(headers).body(bytes);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     /** DELETE /api/feedback-profiles/{id} */

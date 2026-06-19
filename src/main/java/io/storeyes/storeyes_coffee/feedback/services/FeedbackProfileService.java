@@ -101,6 +101,25 @@ public class FeedbackProfileService {
         feedbackProfileRepository.delete(profile);
     }
 
+    public byte[] getLogoBytes(Long id) {
+        FeedbackProfile profile = findById(id);
+        if (profile.getLogoUrl() == null) {
+            throw new RuntimeException("No logo for profile: " + id);
+        }
+        return s3Service.fetchBytes(profile.getLogoUrl());
+    }
+
+    public String getLogoContentType(Long id) {
+        FeedbackProfile profile = findById(id);
+        if (profile.getLogoUrl() == null) return "image/png";
+        String url = profile.getLogoUrl().toLowerCase();
+        if (url.contains(".jpg") || url.contains(".jpeg")) return "image/jpeg";
+        if (url.contains(".gif"))  return "image/gif";
+        if (url.contains(".webp")) return "image/webp";
+        if (url.contains(".svg"))  return "image/svg+xml";
+        return "image/png";
+    }
+
     private String generateCode() {
         String code;
         do {
