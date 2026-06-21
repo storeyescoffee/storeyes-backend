@@ -5,9 +5,12 @@ import io.storeyes.storeyes_coffee.stock.entities.SupplierOrderStatus;
 import io.storeyes.storeyes_coffee.stock.services.SupplierOrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 import java.util.HashMap;
 import java.util.List;
@@ -19,6 +22,19 @@ import java.util.Map;
 public class SupplierOrderController {
 
     private final SupplierOrderService supplierOrderService;
+
+    @GetMapping("/purchases")
+    public ResponseEntity<Map<String, Object>> listPurchases(
+            @RequestParam(required = false) Long supplierId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        List<SupplierOrderSummaryResponse> data = supplierOrderService.listPurchases(supplierId, from, to);
+        Map<String, Object> response = new HashMap<>();
+        response.put("data", data);
+        response.put("message", "Stock purchases retrieved successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.ok(response);
+    }
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> list() {

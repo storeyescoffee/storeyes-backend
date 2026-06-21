@@ -23,6 +23,7 @@ public class SupplierOrderSummaryResponse {
     private String supplierName;
     private int lineCount;
     private BigDecimal totalAmount;
+    private LocalDateTime convertedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

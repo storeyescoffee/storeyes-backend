@@ -45,7 +45,7 @@ public interface SupplierOrderRepository extends JpaRepository<SupplierOrder, Lo
                                (SELECT SUM(l2.line_amount) FROM supplier_order_lines l2 WHERE l2.order_id = o.id),
                                0
                            ),
-                           o.created_at, o.updated_at
+                           o.created_at, o.updated_at, o.converted_at
                     FROM supplier_orders o
                     LEFT JOIN suppliers s ON s.id = o.supplier_id
                     WHERE o.store_id = :storeId
@@ -54,4 +54,32 @@ public interface SupplierOrderRepository extends JpaRepository<SupplierOrder, Lo
             nativeQuery = true
     )
     List<Object[]> listSummaryRows(@Param("storeId") Long storeId);
+
+    @Query(
+            value = """
+                    SELECT o.id, o.status, o.order_date, o.supplier_id,
+                           COALESCE(s.name, o.supplier_name_snapshot),
+                           (SELECT COUNT(*) FROM supplier_order_lines l WHERE l.order_id = o.id),
+                           COALESCE(
+                               (SELECT SUM(l2.line_amount) FROM supplier_order_lines l2 WHERE l2.order_id = o.id),
+                               0
+                           ),
+                           o.created_at, o.updated_at, o.converted_at
+                    FROM supplier_orders o
+                    LEFT JOIN suppliers s ON s.id = o.supplier_id
+                    WHERE o.store_id = :storeId
+                      AND o.converted_at IS NOT NULL
+                      AND (:supplierId IS NULL OR o.supplier_id = :supplierId)
+                      AND (:from IS NULL OR o.converted_at >= :from)
+                      AND (:to IS NULL OR o.converted_at < :to)
+                    ORDER BY o.converted_at DESC
+                    """,
+            nativeQuery = true
+    )
+    List<Object[]> listPurchaseSummaryRows(
+            @Param("storeId") Long storeId,
+            @Param("supplierId") Long supplierId,
+            @Param("from") java.time.LocalDateTime from,
+            @Param("to") java.time.LocalDateTime to
+    );
 }

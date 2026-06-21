@@ -68,6 +68,7 @@ public class SupplierOrderService {
         BigDecimal total = row[6] instanceof BigDecimal b ? b : BigDecimal.valueOf(((Number) row[6]).doubleValue());
         LocalDateTime createdAt = toLocalDateTime(row[7]);
         LocalDateTime updatedAt = toLocalDateTime(row[8]);
+        LocalDateTime convertedAt = row[9] != null ? toLocalDateTime(row[9]) : null;
         return SupplierOrderSummaryResponse.builder()
                 .id(id)
                 .status(status)
@@ -76,9 +77,22 @@ public class SupplierOrderService {
                 .supplierName(supplierName)
                 .lineCount(lineCount)
                 .totalAmount(total.setScale(2, RoundingMode.HALF_UP))
+                .convertedAt(convertedAt)
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .build();
+    }
+
+    public List<SupplierOrderSummaryResponse> listPurchases(Long supplierId, LocalDate from, LocalDate to) {
+        Long storeId = getStoreId();
+        LocalDateTime fromDt = from != null ? from.atStartOfDay() : null;
+        LocalDateTime toDt = to != null ? to.plusDays(1).atStartOfDay() : null;
+        List<Object[]> rows = supplierOrderRepository.listPurchaseSummaryRows(storeId, supplierId, fromDt, toDt);
+        List<SupplierOrderSummaryResponse> out = new ArrayList<>(rows.size());
+        for (Object[] row : rows) {
+            out.add(mapSummaryRow(row));
+        }
+        return out;
     }
 
     private SupplierOrderStatus parseStatus(String rawStatus) {
