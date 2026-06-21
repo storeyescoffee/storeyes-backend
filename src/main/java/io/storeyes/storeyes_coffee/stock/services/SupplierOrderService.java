@@ -85,14 +85,13 @@ public class SupplierOrderService {
 
     public List<SupplierOrderSummaryResponse> listPurchases(Long supplierId, LocalDate from, LocalDate to) {
         Long storeId = getStoreId();
-        LocalDateTime fromDt = from != null ? from.atStartOfDay() : null;
-        LocalDateTime toDt = to != null ? to.plusDays(1).atStartOfDay() : null;
-        List<Object[]> rows = supplierOrderRepository.listPurchaseSummaryRows(storeId, supplierId, fromDt, toDt);
-        List<SupplierOrderSummaryResponse> out = new ArrayList<>(rows.size());
-        for (Object[] row : rows) {
-            out.add(mapSummaryRow(row));
-        }
-        return out;
+        List<Object[]> rows = supplierOrderRepository.listPurchaseSummaryRows(storeId);
+        return rows.stream()
+                .map(this::mapSummaryRow)
+                .filter(p -> supplierId == null || supplierId.equals(p.getSupplierId()))
+                .filter(p -> from == null || (p.getConvertedAt() != null && !p.getConvertedAt().toLocalDate().isBefore(from)))
+                .filter(p -> to == null || (p.getConvertedAt() != null && !p.getConvertedAt().toLocalDate().isAfter(to)))
+                .collect(java.util.stream.Collectors.toList());
     }
 
     private SupplierOrderStatus parseStatus(String rawStatus) {

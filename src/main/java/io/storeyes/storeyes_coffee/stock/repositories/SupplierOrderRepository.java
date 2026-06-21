@@ -69,17 +69,9 @@ public interface SupplierOrderRepository extends JpaRepository<SupplierOrder, Lo
                     LEFT JOIN suppliers s ON s.id = o.supplier_id
                     WHERE o.store_id = :storeId
                       AND o.converted_at IS NOT NULL
-                      AND (:supplierId IS NULL OR o.supplier_id = :supplierId)
-                      AND (:from IS NULL OR o.converted_at >= :from)
-                      AND (:to IS NULL OR o.converted_at < :to)
                     ORDER BY o.converted_at DESC
                     """,
             nativeQuery = true
     )
-    List<Object[]> listPurchaseSummaryRows(
-            @Param("storeId") Long storeId,
-            @Param("supplierId") Long supplierId,
-            @Param("from") java.time.LocalDateTime from,
-            @Param("to") java.time.LocalDateTime to
-    );
+    List<Object[]> listPurchaseSummaryRows(@Param("storeId") Long storeId);
 }
