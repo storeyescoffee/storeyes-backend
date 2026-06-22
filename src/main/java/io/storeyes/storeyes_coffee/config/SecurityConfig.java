@@ -111,6 +111,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/sales/process").permitAll()
+                .requestMatchers("/api/staff/employee-logs/punch").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/feedback").permitAll()
                 .requestMatchers(HttpMethod.PATCH, "/api/feedback/*").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/feedback-profiles/*").permitAll()
