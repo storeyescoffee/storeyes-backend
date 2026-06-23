@@ -103,8 +103,8 @@ server:
     port: ${HTTP_PORT:8080}
 
 firebase:
-  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:classpath:firebase-service-account.json}
-  enabled: ${FIREBASE_ENABLED:false}
+  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:file:./firebase-service-account.json}
+  enabled: ${FIREBASE_ENABLED:true}
 
 # AWS S3 Configuration
 aws:
