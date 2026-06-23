@@ -2,6 +2,7 @@ package io.storeyes.storeyes_coffee.notification.services;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.ApnsConfig;
+import com.google.firebase.messaging.Aps;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
@@ -78,6 +79,9 @@ public class FcmNotificationService {
                 .putAllData(data)
                 .setApnsConfig(ApnsConfig.builder()
                         .putHeader("apns-priority", "10")
+                        .setAps(Aps.builder()
+                                .setSound("default")
+                                .build())
                         .build())
                 .build();
 
