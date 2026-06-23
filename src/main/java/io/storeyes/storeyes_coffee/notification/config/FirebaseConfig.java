@@ -14,8 +14,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.security.CodeSource;
 
 @Slf4j
 @Configuration
@@ -60,23 +58,27 @@ public class FirebaseConfig {
      * Looks for {@value #SERVICE_ACCOUNT_FILE_NAME} in the directory containing the running jar,
      * so the credentials can sit on the same level as the deployed jar without being packaged.
      *
+     * <p>Resolved from the {@code java.class.path} system property: when launched with
+     * {@code java -jar app.jar} this is the single jar path, which is reliable even for
+     * Spring Boot nested jars (where the CodeSource URL is not a hierarchical file URI).
+     * In exploded/IDE runs the classpath has many entries, so we skip the lookup and let
+     * the configured fallback resource handle it.
+     *
      * @return the resolved file, or {@code null} if the jar directory could not be determined.
      */
     private File resolveServiceAccountNextToJar() {
-        try {
-            CodeSource codeSource = FirebaseConfig.class.getProtectionDomain().getCodeSource();
-            if (codeSource == null) {
-                return null;
-            }
-            File codeLocation = new File(codeSource.getLocation().toURI());
-            File jarDir = codeLocation.isFile() ? codeLocation.getParentFile() : codeLocation;
-            if (jarDir == null) {
-                return null;
-            }
-            return new File(jarDir, SERVICE_ACCOUNT_FILE_NAME);
-        } catch (URISyntaxException e) {
-            log.warn("Could not resolve jar location to look up {}", SERVICE_ACCOUNT_FILE_NAME, e);
+        String classPath = System.getProperty("java.class.path");
+        if (classPath == null || classPath.isBlank() || classPath.contains(File.pathSeparator)) {
             return null;
         }
+        File jar = new File(classPath);
+        if (!jar.getName().toLowerCase().endsWith(".jar")) {
+            return null;
+        }
+        File jarDir = jar.getAbsoluteFile().getParentFile();
+        if (jarDir == null) {
+            return null;
+        }
+        return new File(jarDir, SERVICE_ACCOUNT_FILE_NAME);
     }
 }
