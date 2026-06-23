@@ -70,7 +70,7 @@ public class StaffProxyController {
                     targetUri, HttpMethod.valueOf(request.getMethod()), entity, byte[].class);
 
             boolean isEmployeeLogs = HttpMethod.POST.matches(request.getMethod())
-                    && EMPLOYEE_LOGS_PATH.equals(request.getRequestURI());
+                    && request.getRequestURI().startsWith(EMPLOYEE_LOGS_PATH);
             if (isEmployeeLogs && response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 dispatchAttendanceNotifications(response.getBody());
             }
