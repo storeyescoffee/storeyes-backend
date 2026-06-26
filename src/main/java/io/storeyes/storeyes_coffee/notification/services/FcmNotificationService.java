@@ -1,6 +1,7 @@
 package io.storeyes.storeyes_coffee.notification.services;
 
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.AndroidConfig;
 import com.google.firebase.messaging.ApnsConfig;
 import com.google.firebase.messaging.Aps;
 import com.google.firebase.messaging.FirebaseMessaging;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -77,6 +79,10 @@ public class FcmNotificationService {
                         .setBody(body)
                         .build())
                 .putAllData(data)
+                .setAndroidConfig(AndroidConfig.builder()
+                        .setPriority(AndroidConfig.Priority.HIGH)
+                        .setTtl(Duration.ofHours(1).toMillis())
+                        .build())
                 .setApnsConfig(ApnsConfig.builder()
                         .putHeader("apns-priority", "10")
                         .setAps(Aps.builder()

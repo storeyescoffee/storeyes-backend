@@ -2,6 +2,7 @@ package io.storeyes.storeyes_coffee.proxy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.storeyes.storeyes_coffee.firebase.repositories.FirebaseToken2Repository;
 import io.storeyes.storeyes_coffee.notification.services.FcmNotificationService;
 import io.storeyes.storeyes_coffee.rolemapping.repositories.RoleMappingRepository;
@@ -72,7 +73,7 @@ public class StaffProxyController {
             boolean isEmployeeLogs = HttpMethod.POST.matches(request.getMethod())
                     && request.getRequestURI().startsWith(EMPLOYEE_LOGS_PATH);
             if (isEmployeeLogs && response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                dispatchAttendanceNotifications(response.getBody());
+                return augmentWithNotificationResult(response);
             }
 
             return response;
@@ -83,58 +84,96 @@ public class StaffProxyController {
         }
     }
 
-    private void dispatchAttendanceNotifications(byte[] responseBody) {
+    /**
+     * Dispatches attendance notifications then merges the outcome into the upstream JSON body as
+     * {@code "notificationResult": { "tokens": N, "notified": M }} so the caller can see how many
+     * devices were reached. Returns the original response untouched if anything goes wrong.
+     */
+    private ResponseEntity<byte[]> augmentWithNotificationResult(ResponseEntity<byte[]> response) {
         try {
-            JsonNode root = objectMapper.readTree(responseBody);
-            JsonNode notif = root.path("notifications");
-            if (notif.isMissingNode() || !notif.path("send").asBoolean(false)) return;
-            if (notif.path("dndSuppressed").asBoolean(false)) {
-                log.debug("Attendance notifications suppressed by DND window — skipping dispatch");
-                return;
-            }
+            JsonNode root = objectMapper.readTree(response.getBody());
+            NotificationResult result = dispatchAttendanceNotifications(root);
 
-            if (fcmNotificationService.isEmpty()) {
-                log.debug("FCM disabled — skipping attendance notifications");
-                return;
+            if (!(root instanceof ObjectNode obj)) {
+                return response;
             }
+            obj.putObject("notificationResult")
+                    .put("tokens", result.tokens())
+                    .put("notified", result.notified());
 
-            List<String> tokens = firebaseToken2Repository.findActiveTokensByUserId(ATTENDANCE_OWNER_ID);
-            if (tokens.isEmpty()) {
-                log.debug("No active tokens for userId={}", ATTENDANCE_OWNER_ID);
-                return;
-            }
-
-            boolean grouped = notif.path("grouped").asBoolean(false);
-            if (grouped) {
-                String summary = notif.path("summary").asText("Attendance update");
-                String lateCount = String.valueOf(notif.path("lateCount").asInt(0));
-                String absenceCount = String.valueOf(notif.path("absenceCount").asInt(0));
-                fcmNotificationService.get().sendToTokens(
-                        tokens, "Attendance", summary,
-                        Map.of("type", "attendance_summary",
-                                "lateCount", lateCount,
-                                "absenceCount", absenceCount));
-                log.debug("Sent grouped attendance notification: {} (late={}, absent={})", summary, lateCount, absenceCount);
-            } else {
-                JsonNode items = notif.path("items");
-                List<String> sent = new ArrayList<>();
-                for (JsonNode item : items) {
-                    String name = item.path("employeeName").asText();
-                    String status = item.path("status").asText();
-                    String code = item.path("employeeCode").asText();
-                    String body = buildStatusBody(name, status);
-                    fcmNotificationService.get().sendToTokens(
-                            tokens, "Attendance", body,
-                            Map.of("type", "attendance_item",
-                                    "employeeCode", code,
-                                    "status", status));
-                    sent.add(name + ":" + status);
-                }
-                log.debug("Sent {} per-employee attendance notification(s): {}", sent.size(), sent);
-            }
+            byte[] newBody = objectMapper.writeValueAsBytes(obj);
+            HttpHeaders headers = new HttpHeaders();
+            headers.addAll(response.getHeaders());
+            headers.remove(HttpHeaders.CONTENT_LENGTH);
+            headers.setContentLength(newBody.length);
+            return new ResponseEntity<>(newBody, headers, response.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to dispatch attendance notifications: {}", e.getMessage(), e);
+            log.error("Failed to augment employee-logs response with notification result: {}", e.getMessage(), e);
+            return response;
         }
+    }
+
+    /**
+     * Sends the attendance push(es) described by the {@code notifications} block of the upstream body.
+     *
+     * @return the number of target device tokens and how many sends succeeded. For grouped mode
+     *         {@code notified} is the count of devices reached (≤ tokens); for per-employee mode it is
+     *         the sum of successful sends across all items (one push per item per device).
+     */
+    private NotificationResult dispatchAttendanceNotifications(JsonNode root) {
+        JsonNode notif = root.path("notifications");
+        if (notif.isMissingNode() || !notif.path("send").asBoolean(false)) return NotificationResult.NONE;
+        if (notif.path("dndSuppressed").asBoolean(false)) {
+            log.debug("Attendance notifications suppressed by DND window — skipping dispatch");
+            return NotificationResult.NONE;
+        }
+
+        if (fcmNotificationService.isEmpty()) {
+            log.debug("FCM disabled — skipping attendance notifications");
+            return NotificationResult.NONE;
+        }
+
+        List<String> tokens = firebaseToken2Repository.findActiveTokensByUserId(ATTENDANCE_OWNER_ID);
+        if (tokens.isEmpty()) {
+            log.debug("No active tokens for userId={}", ATTENDANCE_OWNER_ID);
+            return NotificationResult.NONE;
+        }
+
+        int notified;
+        boolean grouped = notif.path("grouped").asBoolean(false);
+        if (grouped) {
+            String summary = notif.path("summary").asText("Attendance update");
+            String lateCount = String.valueOf(notif.path("lateCount").asInt(0));
+            String absenceCount = String.valueOf(notif.path("absenceCount").asInt(0));
+            notified = fcmNotificationService.get().sendToTokens(
+                    tokens, "Attendance", summary,
+                    Map.of("type", "attendance_summary",
+                            "lateCount", lateCount,
+                            "absenceCount", absenceCount));
+            log.debug("Sent grouped attendance notification: {} (late={}, absent={})", summary, lateCount, absenceCount);
+        } else {
+            JsonNode items = notif.path("items");
+            List<String> sent = new ArrayList<>();
+            notified = 0;
+            for (JsonNode item : items) {
+                String name = item.path("employeeName").asText();
+                String status = item.path("status").asText();
+                String code = item.path("employeeCode").asText();
+                String body = buildStatusBody(name, status);
+                notified += fcmNotificationService.get().sendToTokens(
+                        tokens, "Attendance", body,
+                        Map.of("type", "attendance_item",
+                                "employeeCode", code,
+                                "status", status));
+                sent.add(name + ":" + status);
+            }
+            log.debug("Sent {} per-employee attendance notification(s): {}", sent.size(), sent);
+        }
+        return new NotificationResult(tokens.size(), notified);
+    }
+
+    private record NotificationResult(int tokens, int notified) {
+        private static final NotificationResult NONE = new NotificationResult(0, 0);
     }
 
     private String buildStatusBody(String name, String status) {
