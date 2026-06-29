@@ -148,8 +148,12 @@ public class AlertService {
                     if (filterAlertType != null) {
                         if (a.getAlertType() != filterAlertType) return false;
                     }
-                    // Otherwise, return alerts with humanJudgement NEW or TRUE_POSITIVE
                     HumanJudgement h = a.getHumanJudgement();
+                    // For unprocessed alerts, return only TRUE_POSITIVE alerts.
+                    if (filterUnprocessed) {
+                        return h == HumanJudgement.TRUE_POSITIVE;
+                    }
+                    // Otherwise, return alerts with humanJudgement NEW or TRUE_POSITIVE
                     return h == null || h == HumanJudgement.NEW || h == HumanJudgement.TRUE_POSITIVE;
                 })
                 .collect(Collectors.toList());
