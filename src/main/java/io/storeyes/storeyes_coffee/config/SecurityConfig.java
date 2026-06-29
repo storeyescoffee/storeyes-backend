@@ -112,6 +112,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/sales/process").permitAll()
                 .requestMatchers("/api/staff/employee-logs/punch").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/notifications/daily-kpi").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/firebase-tokens-v2/test/*").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/feedback").permitAll()
                 .requestMatchers(HttpMethod.PATCH, "/api/feedback/*").permitAll()
