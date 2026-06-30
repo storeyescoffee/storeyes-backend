@@ -152,10 +152,13 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     );
 
     /**
-     * Count of processed alerts for a store on a calendar day ({@code DATE(alert_date) = DATE(:dayStart)}),
-     * with human judgements shown on the default alerts list ({@code NEW}, {@code TRUE_POSITIVE}).
+     * Count of alerts for a store on a calendar day ({@code DATE(alert_date) = DATE(:dayStart)})
+     * shown on the default alerts list: processed alerts, plus unprocessed alerts judged
+     * {@code TRUE_POSITIVE}, restricted to the human judgements in {@code :judgements}
+     * ({@code NEW}, {@code TRUE_POSITIVE}).
      */
-    @Query("SELECT COUNT(a) FROM Alert a WHERE a.isProcessed = true AND a.store.id = :storeId "
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.store.id = :storeId "
+            + "AND (a.isProcessed = true OR a.humanJudgement = io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement.TRUE_POSITIVE) "
             + "AND DATE(a.alertDate) = DATE(:dayStart) "
             + "AND a.humanJudgement IN :judgements")
     long countProcessedHomeAlertsByDay(
@@ -164,10 +167,12 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
             @Param("judgements") List<HumanJudgement> judgements);
 
     /**
-     * Count of processed alerts for a store within a calendar date range (inclusive),
-     * with human judgements shown on the default alerts list ({@code NEW}, {@code TRUE_POSITIVE}).
+     * Count of alerts for a store within a calendar date range (inclusive) shown on the default
+     * alerts list: processed alerts, plus unprocessed alerts judged {@code TRUE_POSITIVE},
+     * restricted to the human judgements in {@code :judgements} ({@code NEW}, {@code TRUE_POSITIVE}).
      */
-    @Query("SELECT COUNT(a) FROM Alert a WHERE a.isProcessed = true AND a.store.id = :storeId "
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.store.id = :storeId "
+            + "AND (a.isProcessed = true OR a.humanJudgement = io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement.TRUE_POSITIVE) "
             + "AND DATE(a.alertDate) >= :startDate AND DATE(a.alertDate) <= :endDate "
             + "AND a.humanJudgement IN :judgements")
     long countProcessedAlertsByDateRange(
