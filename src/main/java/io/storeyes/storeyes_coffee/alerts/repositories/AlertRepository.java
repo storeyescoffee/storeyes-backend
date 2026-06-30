@@ -85,6 +85,24 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
         LocalDateTime endDate,
         Long storeId
     );
+
+    // Default alerts list by exact date (day) and store ID:
+    // processed alerts, plus unprocessed alerts already judged TRUE_POSITIVE
+    @Query("SELECT a FROM Alert a WHERE DATE(a.alertDate) = DATE(:date) AND a.store.id = :storeId "
+            + "AND (a.isProcessed = true OR a.humanJudgement = io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement.TRUE_POSITIVE) "
+            + "ORDER BY a.alertDate DESC")
+    List<Alert> findDefaultListByAlertDateAndStoreId(LocalDateTime date, Long storeId);
+
+    // Default alerts list within a date range and store ID:
+    // processed alerts, plus unprocessed alerts already judged TRUE_POSITIVE
+    @Query("SELECT a FROM Alert a WHERE a.alertDate >= :startDate AND a.alertDate <= :endDate AND a.store.id = :storeId "
+            + "AND (a.isProcessed = true OR a.humanJudgement = io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement.TRUE_POSITIVE) "
+            + "ORDER BY a.alertDate DESC")
+    List<Alert> findDefaultListByAlertDateBetweenAndStoreId(
+        LocalDateTime startDate,
+        LocalDateTime endDate,
+        Long storeId
+    );
     
     // Find unprocessed alerts within a date range and store ID
     @Query("SELECT a FROM Alert a WHERE a.alertDate >= :startDate AND a.alertDate <= :endDate AND a.isProcessed = false AND a.store.id = :storeId ORDER BY a.alertDate DESC")
