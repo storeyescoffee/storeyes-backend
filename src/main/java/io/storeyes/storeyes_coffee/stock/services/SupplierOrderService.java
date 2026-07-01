@@ -4,6 +4,7 @@ import io.storeyes.storeyes_coffee.charges.dto.VariableChargeCreateRequest;
 import io.storeyes.storeyes_coffee.charges.entities.VariableChargeMainCategory;
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeMainCategoryRepository;
 import io.storeyes.storeyes_coffee.charges.services.ChargeService;
+import io.storeyes.storeyes_coffee.documents.services.S3Service;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import io.storeyes.storeyes_coffee.stock.dto.*;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
@@ -20,6 +21,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -43,6 +45,7 @@ public class SupplierOrderService {
     private final StockProductRepository stockProductRepository;
     private final VariableChargeMainCategoryRepository variableChargeMainCategoryRepository;
     private final ChargeService chargeService;
+    private final S3Service s3Service;
 
     private Long getStoreId() {
         return CurrentStoreContext.requireCurrentStoreId();
@@ -241,9 +244,44 @@ public class SupplierOrderService {
         if (order.getConvertedAt() != null) {
             chargeService.deleteVariableChargesForSupplierOrder(id);
         }
+        // Delete S3 document if any
+        if (order.getDocumentUrl() != null) {
+            try { s3Service.deleteFile(order.getDocumentUrl()); } catch (Exception ignored) {}
+        }
         // Delete lines first — the FK has no CASCADE DELETE, so the order delete would fail otherwise.
         supplierOrderRepository.deleteLinesByOrderId(id);
         supplierOrderRepository.deleteNative(id);
+    }
+
+    @Transactional
+    public SupplierOrderDetailResponse uploadOrderDocument(Long id, MultipartFile file) {
+        Long storeId = getStoreId();
+        SupplierOrder order = supplierOrderRepository.findFetchedByIdAndStoreId(id, storeId)
+                .orElseThrow(() -> new IllegalArgumentException("Supplier order not found"));
+        SupplierOrderStatus status = normalizeStatus(order.getStatus());
+        if (status != SupplierOrderStatus.VALID) {
+            throw new IllegalArgumentException("Document can only be attached to VALID orders");
+        }
+        if (order.getDocumentUrl() != null) {
+            try { s3Service.deleteFile(order.getDocumentUrl()); } catch (Exception ignored) {}
+        }
+        String url = s3Service.uploadFile(file, order.getStore().getCode());
+        order.setDocumentUrl(url);
+        supplierOrderRepository.save(order);
+        return toDetailResponse(supplierOrderRepository.findFetchedByIdAndStoreId(id, storeId).orElse(order));
+    }
+
+    @Transactional
+    public SupplierOrderDetailResponse deleteOrderDocument(Long id) {
+        Long storeId = getStoreId();
+        SupplierOrder order = supplierOrderRepository.findFetchedByIdAndStoreId(id, storeId)
+                .orElseThrow(() -> new IllegalArgumentException("Supplier order not found"));
+        if (order.getDocumentUrl() != null) {
+            try { s3Service.deleteFile(order.getDocumentUrl()); } catch (Exception ignored) {}
+            order.setDocumentUrl(null);
+            supplierOrderRepository.save(order);
+        }
+        return toDetailResponse(supplierOrderRepository.findFetchedByIdAndStoreId(id, storeId).orElse(order));
     }
 
     @Transactional
@@ -412,6 +450,7 @@ public class SupplierOrderService {
                 .messageText(order.getMessageText())
                 .totalAmount(total.setScale(2, RoundingMode.HALF_UP))
                 .convertedAt(order.getConvertedAt())
+                .documentUrl(order.getDocumentUrl())
                 .lines(lineResponses)
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())

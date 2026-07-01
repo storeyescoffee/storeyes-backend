@@ -9,8 +9,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -131,6 +133,52 @@ public class ChargeController {
     public ResponseEntity<Void> deleteFixedCharge(@PathVariable Long id) {
         chargeService.deleteFixedCharge(id);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    /**
+     * Upload document for fixed charge
+     * POST /api/charges/fixed/{id}/document
+     */
+    @PostMapping(value = "/fixed/{id}/document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadFixedChargeDocument(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        try {
+            FixedChargeResponse charge = chargeService.uploadFixedChargeDocument(id, file);
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", charge);
+            response.put("message", "Document uploaded successfully");
+            response.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Upload failed");
+            err.put("message", e.getMessage());
+            err.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+    }
+
+    /**
+     * Delete document for fixed charge
+     * DELETE /api/charges/fixed/{id}/document
+     */
+    @DeleteMapping("/fixed/{id}/document")
+    public ResponseEntity<Map<String, Object>> deleteFixedChargeDocument(@PathVariable Long id) {
+        try {
+            FixedChargeResponse charge = chargeService.deleteFixedChargeDocument(id);
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", charge);
+            response.put("message", "Document deleted successfully");
+            response.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Delete failed");
+            err.put("message", e.getMessage());
+            err.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
     }
 
     /**
@@ -300,6 +348,52 @@ public class ChargeController {
     public ResponseEntity<Void> deleteVariableCharge(@PathVariable Long id) {
         chargeService.deleteVariableCharge(id);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    /**
+     * Upload document for variable charge
+     * POST /api/charges/variable/{id}/document
+     */
+    @PostMapping(value = "/variable/{id}/document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadVariableChargeDocument(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        try {
+            VariableChargeResponse charge = chargeService.uploadVariableChargeDocument(id, file);
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", charge);
+            response.put("message", "Document uploaded successfully");
+            response.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Upload failed");
+            err.put("message", e.getMessage());
+            err.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+    }
+
+    /**
+     * Delete document for variable charge
+     * DELETE /api/charges/variable/{id}/document
+     */
+    @DeleteMapping("/variable/{id}/document")
+    public ResponseEntity<Map<String, Object>> deleteVariableChargeDocument(@PathVariable Long id) {
+        try {
+            VariableChargeResponse charge = chargeService.deleteVariableChargeDocument(id);
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", charge);
+            response.put("message", "Document deleted successfully");
+            response.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Delete failed");
+            err.put("message", e.getMessage());
+            err.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
     }
 
     // ==================== Variable Charge Main Categories ====================

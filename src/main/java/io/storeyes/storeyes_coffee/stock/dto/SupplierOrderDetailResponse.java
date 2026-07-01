@@ -25,6 +25,7 @@ public class SupplierOrderDetailResponse {
     private String messageText;
     private BigDecimal totalAmount;
     private LocalDateTime convertedAt;
+    private String documentUrl;
     private List<SupplierOrderLineResponse> lines;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

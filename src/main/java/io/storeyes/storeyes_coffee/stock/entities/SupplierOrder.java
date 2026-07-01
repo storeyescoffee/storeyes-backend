@@ -56,6 +56,9 @@ public class SupplierOrder {
     @Column(name = "converted_at")
     private LocalDateTime convertedAt;
 
+    @Column(name = "document_url", length = 1024)
+    private String documentUrl;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<SupplierOrderLine> lines = new ArrayList<>();

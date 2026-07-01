@@ -81,6 +81,9 @@ public class FixedCharge {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+    @Column(name = "document_url", length = 1024)
+    private String documentUrl;
+
     @OneToMany(mappedBy = "fixedCharge", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<PersonnelEmployee> employees = new ArrayList<>();

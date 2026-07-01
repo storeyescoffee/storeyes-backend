@@ -7,8 +7,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 
@@ -141,6 +143,36 @@ public class SupplierOrderController {
             Map<String, Object> response = new HashMap<>();
             response.put("data", data);
             response.put("message", "Supplier order rejected successfully");
+            response.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
+        }
+    }
+
+    @PostMapping(value = "/{id}/document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadOrderDocument(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        try {
+            SupplierOrderDetailResponse data = supplierOrderService.uploadOrderDocument(id, file);
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", data);
+            response.put("message", "Document uploaded successfully");
+            response.put("timestamp", java.time.OffsetDateTime.now());
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}/document")
+    public ResponseEntity<Map<String, Object>> deleteOrderDocument(@PathVariable Long id) {
+        try {
+            SupplierOrderDetailResponse data = supplierOrderService.deleteOrderDocument(id);
+            Map<String, Object> response = new HashMap<>();
+            response.put("data", data);
+            response.put("message", "Document deleted successfully");
             response.put("timestamp", java.time.OffsetDateTime.now());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {

@@ -27,6 +27,7 @@ public class FixedChargeResponse {
     private TrendDirection trend;
     private BigDecimal trendPercentage;
     private Boolean abnormalIncrease;
+    private String documentUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -11,6 +11,7 @@ import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeMainCatego
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeSubCategoryRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.EmployeeRepository;
+import io.storeyes.storeyes_coffee.documents.services.S3Service;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
 import io.storeyes.storeyes_coffee.stock.services.StockMovementService;
@@ -24,6 +25,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -52,6 +54,9 @@ public class ChargeService {
     private final EntityManager entityManager;
     private final UserPreferenceRepository userPreferenceRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
+    private final S3Service s3Service;
+
+    private static final String S3_URL_PREFIX = "https://storeyes-documents.s3.eu-south-2.amazonaws.com/";
 
     private static final BigDecimal THRESHOLD_PERCENTAGE = BigDecimal.valueOf(20);
     private static final int SCALE = 2;
@@ -413,6 +418,72 @@ public class ChargeService {
         }
 
         fixedChargeRepository.deleteById(id); // Cascade will delete employees
+    }
+
+    @Transactional
+    public FixedChargeResponse uploadFixedChargeDocument(Long id, MultipartFile file) {
+        Long storeId = getChargesDataStoreId();
+        FixedCharge charge = fixedChargeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Fixed charge not found with id: " + id));
+        if (!charge.getStore().getId().equals(storeId)) {
+            throw new RuntimeException("Fixed charge not found with id: " + id);
+        }
+        if (charge.getDocumentUrl() != null) {
+            try { s3Service.deleteFile(charge.getDocumentUrl()); } catch (Exception ignored) {}
+        }
+        String url = s3Service.uploadFile(file, charge.getStore().getCode());
+        charge.setDocumentUrl(url);
+        return toFixedChargeResponse(fixedChargeRepository.save(charge));
+    }
+
+    @Transactional
+    public FixedChargeResponse deleteFixedChargeDocument(Long id) {
+        Long storeId = getChargesDataStoreId();
+        FixedCharge charge = fixedChargeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Fixed charge not found with id: " + id));
+        if (!charge.getStore().getId().equals(storeId)) {
+            throw new RuntimeException("Fixed charge not found with id: " + id);
+        }
+        if (charge.getDocumentUrl() != null) {
+            try { s3Service.deleteFile(charge.getDocumentUrl()); } catch (Exception ignored) {}
+            charge.setDocumentUrl(null);
+            fixedChargeRepository.save(charge);
+        }
+        return toFixedChargeResponse(charge);
+    }
+
+    @Transactional
+    public VariableChargeResponse uploadVariableChargeDocument(Long id, MultipartFile file) {
+        Long storeId = getChargesDataStoreId();
+        VariableCharge charge = variableChargeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Variable charge not found with id: " + id));
+        if (!charge.getStore().getId().equals(storeId)) {
+            throw new RuntimeException("Variable charge not found with id: " + id);
+        }
+        if (charge.getPurchaseOrderUrl() != null && charge.getPurchaseOrderUrl().startsWith(S3_URL_PREFIX)) {
+            try { s3Service.deleteFile(charge.getPurchaseOrderUrl()); } catch (Exception ignored) {}
+        }
+        String url = s3Service.uploadFile(file, charge.getStore().getCode());
+        charge.setPurchaseOrderUrl(url);
+        return toVariableChargeResponse(variableChargeRepository.save(charge));
+    }
+
+    @Transactional
+    public VariableChargeResponse deleteVariableChargeDocument(Long id) {
+        Long storeId = getChargesDataStoreId();
+        VariableCharge charge = variableChargeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Variable charge not found with id: " + id));
+        if (!charge.getStore().getId().equals(storeId)) {
+            throw new RuntimeException("Variable charge not found with id: " + id);
+        }
+        if (charge.getPurchaseOrderUrl() != null) {
+            if (charge.getPurchaseOrderUrl().startsWith(S3_URL_PREFIX)) {
+                try { s3Service.deleteFile(charge.getPurchaseOrderUrl()); } catch (Exception ignored) {}
+            }
+            charge.setPurchaseOrderUrl(null);
+            variableChargeRepository.save(charge);
+        }
+        return toVariableChargeResponse(charge);
     }
 
     /**
@@ -1599,6 +1670,7 @@ public class ChargeService {
                 .trend(charge.getTrend())
                 .trendPercentage(charge.getTrendPercentage())
                 .abnormalIncrease(charge.getAbnormalIncrease())
+                .documentUrl(charge.getDocumentUrl())
                 .createdAt(charge.getCreatedAt())
                 .updatedAt(charge.getUpdatedAt())
                 .build();
@@ -1649,6 +1721,7 @@ public class ChargeService {
                 .abnormalIncrease(charge.getAbnormalIncrease())
                 .previousAmount(charge.getPreviousAmount())
                 .notes(charge.getNotes())
+                .documentUrl(charge.getDocumentUrl())
                 .createdAt(charge.getCreatedAt())
                 .updatedAt(charge.getUpdatedAt())
                 .build();
