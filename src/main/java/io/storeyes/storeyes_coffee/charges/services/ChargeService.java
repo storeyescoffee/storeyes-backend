@@ -429,6 +429,9 @@ public class ChargeService {
         if (!charge.getStore().getId().equals(storeId)) {
             throw new RuntimeException("Fixed charge not found with id: " + id);
         }
+        if (charge.getCategory() == ChargeCategory.PERSONNEL) {
+            throw new RuntimeException("Attachments are not supported for personnel charges");
+        }
         if (charge.getDocumentUrl() != null) {
             try { s3Service.deleteFile(charge.getDocumentUrl()); } catch (Exception ignored) {}
         }
