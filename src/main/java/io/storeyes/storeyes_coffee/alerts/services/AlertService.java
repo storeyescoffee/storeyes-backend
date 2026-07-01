@@ -116,14 +116,16 @@ public class AlertService {
             if (filterUnprocessed) {
                 alerts = alertRepository.findUnprocessedByAlertDateBetweenAndStoreId(queryDate, queryEndDate, dataStoreId);
             } else {
-                alerts = alertRepository.findProcessedByAlertDateBetweenAndStoreId(queryDate, queryEndDate, dataStoreId);
+                // Default list: processed alerts + unprocessed alerts judged TRUE_POSITIVE
+                alerts = alertRepository.findDefaultListByAlertDateBetweenAndStoreId(queryDate, queryEndDate, dataStoreId);
             }
         } else {
             // Exact date (or defaulted to today)
             if (filterUnprocessed) {
                 alerts = alertRepository.findUnprocessedByAlertDateAndStoreId(queryDate, dataStoreId);
             } else {
-                alerts = alertRepository.findProcessedByAlertDateAndStoreId(queryDate, dataStoreId);
+                // Default list: processed alerts + unprocessed alerts judged TRUE_POSITIVE
+                alerts = alertRepository.findDefaultListByAlertDateAndStoreId(queryDate, dataStoreId);
             }
         }
 
