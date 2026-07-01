@@ -59,6 +59,7 @@ public class ChargeService {
     private static final String S3_URL_PREFIX = "https://storeyes-documents.s3.eu-south-2.amazonaws.com/";
 
     private static final BigDecimal THRESHOLD_PERCENTAGE = BigDecimal.valueOf(20);
+    private static final BigDecimal MAX_TREND_PERCENTAGE = new BigDecimal("999.99");
     private static final int SCALE = 2;
     private static final int PRECISION_SCALE = 4;
     private static final String PREFERENCE_PERSONNEL_LAST_PERIOD = "personnel_charge_last_period";
@@ -1620,7 +1621,9 @@ public class ChargeService {
             if (previousAmount.compareTo(BigDecimal.ZERO) > 0) {
                 percentage = difference.divide(previousAmount, PRECISION_SCALE, RoundingMode.HALF_UP)
                         .multiply(BigDecimal.valueOf(100))
-                        .setScale(SCALE, RoundingMode.HALF_UP);
+                        .setScale(SCALE, RoundingMode.HALF_UP)
+                        .min(MAX_TREND_PERCENTAGE)
+                        .max(MAX_TREND_PERCENTAGE.negate());
             }
 
             // Determine trend direction
