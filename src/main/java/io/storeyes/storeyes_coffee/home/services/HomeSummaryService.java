@@ -1,10 +1,12 @@
 package io.storeyes.storeyes_coffee.home.services;
 
+import io.storeyes.storeyes_coffee.alerts.entities.AlertType;
 import io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement;
 import io.storeyes.storeyes_coffee.alerts.repositories.AlertRepository;
 import io.storeyes.storeyes_coffee.home.dto.HomeSummaryResponse;
 import io.storeyes.storeyes_coffee.kpi.services.KpiService;
 import io.storeyes.storeyes_coffee.statistics.services.StatisticsService;
+import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class HomeSummaryService {
     private final AlertRepository alertRepository;
     private final KpiService kpiService;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
+    private final StoreRepository storeRepository;
 
     /**
      * @param storeId      authenticated store (KPI / alerts source may be remapped for demo)
@@ -44,10 +47,32 @@ public class HomeSummaryService {
                 demoStoreDataSourceResolver.resolveAlertsDataContext(storeId);
         // For demo stores, use the fixed alertDate from the mapping instead of the display date
         LocalDate alertsQueryDate = alertsCtx.alertDate() != null ? alertsCtx.alertDate() : displayDate;
-        long alertsCount = alertRepository.countProcessedHomeAlertsByDay(
-                alertsCtx.dataStoreId(),
-                alertsQueryDate.atStartOfDay(),
-                List.of(HumanJudgement.NEW, HumanJudgement.TRUE_POSITIVE));
+
+        // Per-store alert-type visibility: count only enabled types. Flags are read from the
+        // selected store (not the demo data store), where the configuration lives.
+        var store = storeRepository.findById(storeId).orElse(null);
+        boolean notTappedEnabled = store == null || store.isNotTappedAlertsEnabled();
+        boolean returnEnabled = store == null || store.isReturnAlertsEnabled();
+
+        long alertsCount;
+        if (!notTappedEnabled && !returnEnabled) {
+            alertsCount = 0;
+        } else if (notTappedEnabled && returnEnabled) {
+            alertsCount = alertRepository.countProcessedHomeAlertsByDay(
+                    alertsCtx.dataStoreId(),
+                    alertsQueryDate.atStartOfDay(),
+                    List.of(HumanJudgement.NEW, HumanJudgement.TRUE_POSITIVE));
+        } else {
+            List<AlertType> enabledTypes = notTappedEnabled
+                    ? List.of(AlertType.NOT_TAPPED)
+                    : List.of(AlertType.RETURN);
+            alertsCount = alertRepository.countProcessedHomeAlertsByDayAndTypes(
+                    alertsCtx.dataStoreId(),
+                    alertsQueryDate.atStartOfDay(),
+                    List.of(HumanJudgement.NEW, HumanJudgement.TRUE_POSITIVE),
+                    enabledTypes,
+                    notTappedEnabled); // null alertType counts as NOT_TAPPED
+        }
 
         Optional<Double> dailyTtc = kpiService.getDailyRevenueTtcForDate(storeId, displayDate);
 

@@ -167,6 +167,23 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
             @Param("judgements") List<HumanJudgement> judgements);
 
     /**
+     * Same as {@link #countProcessedHomeAlertsByDay} but restricted to the given alert types
+     * (per-store alert-type visibility). Rows with a null alertType count as NOT_TAPPED,
+     * included when {@code includeNullType} is true.
+     */
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.store.id = :storeId "
+            + "AND (a.isProcessed = true OR a.humanJudgement = io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement.TRUE_POSITIVE) "
+            + "AND DATE(a.alertDate) = DATE(:dayStart) "
+            + "AND a.humanJudgement IN :judgements "
+            + "AND (a.alertType IN :alertTypes OR (:includeNullType = true AND a.alertType IS NULL))")
+    long countProcessedHomeAlertsByDayAndTypes(
+            @Param("storeId") Long storeId,
+            @Param("dayStart") LocalDateTime dayStart,
+            @Param("judgements") List<HumanJudgement> judgements,
+            @Param("alertTypes") List<AlertType> alertTypes,
+            @Param("includeNullType") boolean includeNullType);
+
+    /**
      * Count of alerts for a store within a calendar date range (inclusive) shown on the default
      * alerts list: processed alerts, plus unprocessed alerts judged {@code TRUE_POSITIVE},
      * restricted to the human judgements in {@code :judgements} ({@code NEW}, {@code TRUE_POSITIVE}).
