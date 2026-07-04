@@ -3,7 +3,6 @@ package io.storeyes.storeyes_coffee.charges.controllers;
 import io.storeyes.storeyes_coffee.charges.dto.*;
 import io.storeyes.storeyes_coffee.charges.entities.ChargeCategory;
 import io.storeyes.storeyes_coffee.charges.entities.ChargePeriod;
-import io.storeyes.storeyes_coffee.charges.entities.EmployeeType;
 import io.storeyes.storeyes_coffee.charges.services.ChargeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -223,7 +222,7 @@ public class ChargeController {
      * GET /api/charges/fixed/personnel/employees
      */
     @GetMapping("/fixed/personnel/employees")
-    public ResponseEntity<Map<String, Object>> getAvailableEmployees(@RequestParam(required = false) EmployeeType type) {
+    public ResponseEntity<Map<String, Object>> getAvailableEmployees(@RequestParam(required = false) String type) {
         List<PersonnelEmployeeResponse> employees = chargeService.getAvailableEmployees(type);
         
         Map<String, Object> response = new HashMap<>();
@@ -263,6 +262,68 @@ public class ChargeController {
         Map<String, Object> response = new HashMap<>();
         response.put("data", data);
         response.put("message", "Last period saved successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.ok(response);
+    }
+
+    // ==================== Personnel Types Endpoints ====================
+
+    /**
+     * List all personnel types for the current store.
+     * GET /api/charges/fixed/personnel/types?includeInactive=false
+     */
+    @GetMapping("/fixed/personnel/types")
+    public ResponseEntity<Map<String, Object>> getPersonnelTypes(
+            @RequestParam(defaultValue = "false") boolean includeInactive) {
+        List<PersonnelTypeResponse> types = chargeService.getPersonnelTypes(includeInactive);
+        Map<String, Object> response = new HashMap<>();
+        response.put("data", types);
+        response.put("message", "Personnel types retrieved successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Create a new personnel type.
+     * POST /api/charges/fixed/personnel/types
+     */
+    @PostMapping("/fixed/personnel/types")
+    public ResponseEntity<Map<String, Object>> createPersonnelType(
+            @Valid @RequestBody CreatePersonnelTypeRequest request) {
+        PersonnelTypeResponse type = chargeService.createPersonnelType(request);
+        Map<String, Object> response = new HashMap<>();
+        response.put("data", type);
+        response.put("message", "Personnel type created successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Update a personnel type's name.
+     * PUT /api/charges/fixed/personnel/types/{id}
+     */
+    @PutMapping("/fixed/personnel/types/{id}")
+    public ResponseEntity<Map<String, Object>> updatePersonnelType(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdatePersonnelTypeRequest request) {
+        PersonnelTypeResponse type = chargeService.updatePersonnelType(id, request);
+        Map<String, Object> response = new HashMap<>();
+        response.put("data", type);
+        response.put("message", "Personnel type updated successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Toggle active/inactive state of a personnel type (soft delete).
+     * PUT /api/charges/fixed/personnel/types/{id}/toggle
+     */
+    @PutMapping("/fixed/personnel/types/{id}/toggle")
+    public ResponseEntity<Map<String, Object>> togglePersonnelType(@PathVariable Long id) {
+        PersonnelTypeResponse type = chargeService.togglePersonnelType(id);
+        Map<String, Object> response = new HashMap<>();
+        response.put("data", type);
+        response.put("message", "Personnel type toggled successfully");
         response.put("timestamp", java.time.OffsetDateTime.now());
         return ResponseEntity.ok(response);
     }

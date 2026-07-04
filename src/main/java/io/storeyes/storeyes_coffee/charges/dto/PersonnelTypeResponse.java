@@ -5,15 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.util.List;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PersonnelDataDTO {
-    private String type;
-    private BigDecimal totalAmount;
-    private List<PersonnelEmployeeDTO> employees;
+public class PersonnelTypeResponse {
+    private Long id;
+    private String name;
+    private boolean isActive;
+    private LocalDateTime createdAt;
 }

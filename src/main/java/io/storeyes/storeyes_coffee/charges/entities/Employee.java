@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -41,9 +42,8 @@ public class Employee {
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
-    @Column(name = "type", length = 20)
-    @Enumerated(EnumType.STRING)
-    private EmployeeType type;
+    @Column(name = "type", length = 100)
+    private String type;
 
     @Column(name = "position", length = 100)
     private String position;

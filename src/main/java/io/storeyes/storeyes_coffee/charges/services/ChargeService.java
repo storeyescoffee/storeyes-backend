@@ -11,6 +11,7 @@ import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeMainCatego
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeSubCategoryRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeRepository;
 import io.storeyes.storeyes_coffee.charges.repositories.EmployeeRepository;
+import io.storeyes.storeyes_coffee.charges.repositories.PersonnelTypeRepository;
 import io.storeyes.storeyes_coffee.documents.services.S3Service;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
@@ -51,6 +52,7 @@ public class ChargeService {
     private final StockMovementService stockMovementService;
     private final StoreRepository storeRepository;
     private final EmployeeRepository employeeRepository;
+    private final PersonnelTypeRepository personnelTypeRepository;
     private final EntityManager entityManager;
     private final UserPreferenceRepository userPreferenceRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
@@ -527,7 +529,7 @@ public class ChargeService {
      * Returns Employee entities from the employees table (reusable employees)
      * Filters by authenticated user's store
      */
-    public List<PersonnelEmployeeResponse> getAvailableEmployees(EmployeeType type) {
+    public List<PersonnelEmployeeResponse> getAvailableEmployees(String type) {
         Long storeId = getChargesDataStoreId();
         List<Employee> employees = employeeRepository.findByStoreIdAndType(storeId, type);
         
@@ -541,6 +543,70 @@ public class ChargeService {
                         .startDate(emp.getStartDate())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    // ==================== Personnel Types ====================
+
+    public List<PersonnelTypeResponse> getPersonnelTypes(boolean includeInactive) {
+        Long storeId = getContextStoreId();
+        List<PersonnelType> types = includeInactive
+                ? personnelTypeRepository.findByStoreIdOrderByNameAsc(storeId)
+                : personnelTypeRepository.findByStoreIdAndIsActiveTrueOrderByNameAsc(storeId);
+        return types.stream().map(this::toPersonnelTypeResponse).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public PersonnelTypeResponse createPersonnelType(CreatePersonnelTypeRequest request) {
+        Long storeId = getContextStoreId();
+        String trimmedName = request.getName().trim();
+        if (personnelTypeRepository.existsByStoreIdAndNameIgnoreCase(storeId, trimmedName)) {
+            throw new RuntimeException("A personnel type with this name already exists");
+        }
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new RuntimeException("Store not found"));
+        PersonnelType type = PersonnelType.builder()
+                .store(store)
+                .name(trimmedName)
+                .isActive(true)
+                .build();
+        return toPersonnelTypeResponse(personnelTypeRepository.save(type));
+    }
+
+    @Transactional
+    public PersonnelTypeResponse updatePersonnelType(Long id, UpdatePersonnelTypeRequest request) {
+        Long storeId = getContextStoreId();
+        PersonnelType type = personnelTypeRepository.findByStoreIdAndId(storeId, id)
+                .orElseThrow(() -> new RuntimeException("Personnel type not found"));
+        String trimmedName = request.getName().trim();
+        if (!type.getName().equalsIgnoreCase(trimmedName)
+                && personnelTypeRepository.existsByStoreIdAndNameIgnoreCase(storeId, trimmedName)) {
+            throw new RuntimeException("A personnel type with this name already exists");
+        }
+        String oldName = type.getName();
+        type.setName(trimmedName);
+        personnelTypeRepository.save(type);
+        // Update existing employees and personnel_employees that used the old type name
+        employeeRepository.findByStoreIdAndType(storeId, oldName)
+                .forEach(emp -> { emp.setType(trimmedName); employeeRepository.save(emp); });
+        return toPersonnelTypeResponse(type);
+    }
+
+    @Transactional
+    public PersonnelTypeResponse togglePersonnelType(Long id) {
+        Long storeId = getContextStoreId();
+        PersonnelType type = personnelTypeRepository.findByStoreIdAndId(storeId, id)
+                .orElseThrow(() -> new RuntimeException("Personnel type not found"));
+        type.setActive(!type.isActive());
+        return toPersonnelTypeResponse(personnelTypeRepository.save(type));
+    }
+
+    private PersonnelTypeResponse toPersonnelTypeResponse(PersonnelType type) {
+        return PersonnelTypeResponse.builder()
+                .id(type.getId())
+                .name(type.getName())
+                .isActive(type.isActive())
+                .createdAt(type.getCreatedAt())
+                .build();
     }
 
     // ==================== Variable Charges ====================
@@ -1734,12 +1800,12 @@ public class ChargeService {
 
         // Build personnel data if category is PERSONNEL
         if (charge.getCategory() == ChargeCategory.PERSONNEL && charge.getEmployees() != null) {
-            Map<EmployeeType, List<PersonnelEmployeeDTO>> groupedByType = charge.getEmployees().stream()
+            Map<String, List<PersonnelEmployeeDTO>> groupedByType = charge.getEmployees().stream()
                     .map(emp -> toPersonnelEmployeeDTOFilteredByMonth(emp, monthKey))
-                    .collect(Collectors.groupingBy(emp -> emp.getType() != null ? emp.getType() : EmployeeType.SERVER));
+                    .collect(Collectors.groupingBy(emp -> emp.getType() != null ? emp.getType() : "Other"));
 
             List<PersonnelDataDTO> personnelData = new ArrayList<>();
-            for (Map.Entry<EmployeeType, List<PersonnelEmployeeDTO>> entry : groupedByType.entrySet()) {
+            for (Map.Entry<String, List<PersonnelEmployeeDTO>> entry : groupedByType.entrySet()) {
                 // Calculate total amount for the requested month
                 BigDecimal totalAmount = BigDecimal.ZERO;
                 if (monthKey != null) {

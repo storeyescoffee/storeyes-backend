@@ -1,6 +1,5 @@
 package io.storeyes.storeyes_coffee.charges.dto;
 
-import io.storeyes.storeyes_coffee.charges.entities.EmployeeType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +17,7 @@ import java.time.LocalDate;
 public class PersonnelEmployeeResponse {
     private Long id;
     private String name;
-    private EmployeeType type;
+    private String type;
     private String position;
     private LocalDate startDate;
 }

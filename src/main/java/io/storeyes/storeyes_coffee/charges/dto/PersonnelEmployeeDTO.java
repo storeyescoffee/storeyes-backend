@@ -1,6 +1,5 @@
 package io.storeyes.storeyes_coffee.charges.dto;
 
-import io.storeyes.storeyes_coffee.charges.entities.EmployeeType;
 import io.storeyes.storeyes_coffee.charges.entities.SalaryByPeriod;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +17,7 @@ import java.util.Map;
 public class PersonnelEmployeeDTO {
     private Long id;
     private String name;
-    private EmployeeType type;
+    private String type;
     private String position;
     private LocalDate startDate;
     private BigDecimal salary;

@@ -1,6 +1,5 @@
 package io.storeyes.storeyes_coffee.charges.dto;
 
-import io.storeyes.storeyes_coffee.charges.entities.EmployeeType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -19,12 +18,13 @@ import java.util.Map;
 @Builder
 public class PersonnelEmployeeRequest {
     private Long id; // If provided, reuse existing employee
-    
+
     @NotBlank(message = "Employee name is required")
     @Size(max = 100, message = "Employee name must not exceed 100 characters")
     private String name;
-    
-    private EmployeeType type;
+
+    @Size(max = 100, message = "Type must not exceed 100 characters")
+    private String type;
     
     @Size(max = 100, message = "Position must not exceed 100 characters")
     private String position;
