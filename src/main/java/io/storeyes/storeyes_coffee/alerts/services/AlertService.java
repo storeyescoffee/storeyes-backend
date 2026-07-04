@@ -10,6 +10,7 @@ import io.storeyes.storeyes_coffee.alerts.entities.HumanJudgement;
 import io.storeyes.storeyes_coffee.alerts.mappers.AlertMapper;
 import io.storeyes.storeyes_coffee.alerts.repositories.AlertRepository;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
+import io.storeyes.storeyes_coffee.store.entities.Store;
 import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import io.storeyes.storeyes_coffee.store.services.DemoStoreDataSourceResolver;
 import jakarta.transaction.Transactional;
@@ -92,6 +93,11 @@ public class AlertService {
         if (currentStore != null) {
             notTappedEnabled = currentStore.isNotTappedAlertsEnabled();
             returnEnabled = currentStore.isReturnAlertsEnabled();
+            // Alerts locked until the activation date (default creation + 3 weeks);
+            // null activation date (legacy stores) counts as active.
+            if (!isAlertsActive(currentStore)) {
+                return List.of();
+            }
         }
 
         // Resolve demo-store context (data store + optional fixed alert date).
@@ -190,7 +196,17 @@ public class AlertService {
         return AlertSettingsDTO.builder()
                 .notTappedEnabled(store.isNotTappedAlertsEnabled())
                 .returnEnabled(store.isReturnAlertsEnabled())
+                .alertsActive(isAlertsActive(store))
                 .build();
+    }
+
+    /**
+     * Alerts are locked until the store's activation date (default creation + 3 weeks);
+     * a null activation date (legacy stores) counts as active.
+     */
+    private static boolean isAlertsActive(Store store) {
+        LocalDateTime activation = store.getAlertsActivationDate();
+        return activation == null || !LocalDateTime.now().isBefore(activation);
     }
 
     /**

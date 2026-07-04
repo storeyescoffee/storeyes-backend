@@ -53,6 +53,14 @@ public class Store {
     @Column(name = "return_alerts_enabled", nullable = false, columnDefinition = "boolean not null default true")
     private boolean returnAlertsEnabled = true;
 
+    /**
+     * Alerts stay locked until this date (default: creation + 3 weeks, set in {@link #prePersist()}).
+     * Null is treated as active (legacy stores created before V27). Managed via SQL, e.g.
+     * {@code UPDATE stores SET alerts_activation_date = NOW() WHERE code = '...';}
+     */
+    @Column(name = "alerts_activation_date")
+    private LocalDateTime alertsActivationDate;
+
     @Column(name = "created_at", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
     @CreationTimestamp
@@ -68,6 +76,9 @@ public class Store {
     public void prePersist() {
         if (this.status == null) {
             this.status = StoreStatus.NEW;
+        }
+        if (this.alertsActivationDate == null) {
+            this.alertsActivationDate = LocalDateTime.now().plusWeeks(3);
         }
     }
 

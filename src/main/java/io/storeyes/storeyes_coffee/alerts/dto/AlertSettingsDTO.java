@@ -16,4 +16,7 @@ public class AlertSettingsDTO {
 
     private boolean notTappedEnabled;
     private boolean returnEnabled;
+
+    /** Whether the alerts feature is active for this store (activation date reached). */
+    private boolean alertsActive;
 }

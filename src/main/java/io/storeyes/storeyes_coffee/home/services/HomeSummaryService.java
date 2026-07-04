@@ -12,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -54,8 +56,27 @@ public class HomeSummaryService {
         boolean notTappedEnabled = store == null || store.isNotTappedAlertsEnabled();
         boolean returnEnabled = store == null || store.isReturnAlertsEnabled();
 
+        // Alerts activation: locked until alerts_activation_date (default creation + 3 weeks).
+        // Null activation date (legacy stores) counts as active.
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime activationDate = store != null ? store.getAlertsActivationDate() : null;
+        boolean alertsActive = activationDate == null || !now.isBefore(activationDate);
+        int activationProgress;
+        if (alertsActive) {
+            activationProgress = 100;
+        } else {
+            LocalDateTime start = store.getCreatedAt() != null
+                    ? store.getCreatedAt()
+                    : activationDate.minusWeeks(3);
+            long totalSeconds = Duration.between(start, activationDate).getSeconds();
+            long elapsedSeconds = Duration.between(start, now).getSeconds();
+            activationProgress = totalSeconds <= 0
+                    ? 99
+                    : (int) Math.min(99, Math.max(0, elapsedSeconds * 100 / totalSeconds));
+        }
+
         long alertsCount;
-        if (!notTappedEnabled && !returnEnabled) {
+        if (!alertsActive || (!notTappedEnabled && !returnEnabled)) {
             alertsCount = 0;
         } else if (notTappedEnabled && returnEnabled) {
             alertsCount = alertRepository.countProcessedHomeAlertsByDay(
@@ -82,6 +103,11 @@ public class HomeSummaryService {
                 .dailyRevenueTtc(dailyTtc.orElse(null))
                 .displayDate(displayDate.format(ISO_DATE))
                 .monthKey(monthKey)
+                .alertsActive(alertsActive)
+                .alertsActivationProgress(activationProgress)
+                .alertsActivationDate(activationDate != null
+                        ? activationDate.toLocalDate().format(ISO_DATE)
+                        : null)
                 .build();
     }
 

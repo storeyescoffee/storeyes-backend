@@ -30,4 +30,16 @@ public class HomeSummaryResponse {
 
     /** Calendar month of {@link #getDisplayDate()} for {@link #getMonthProfit()} ({@code yyyy-MM}). */
     private String monthKey;
+
+    /** Whether the alerts feature is active for this store (activation date reached). */
+    private boolean alertsActive;
+
+    /**
+     * Progress towards alerts activation as a percentage (0-99 while locked, 100 when active),
+     * linear in time between store creation and the activation date.
+     */
+    private int alertsActivationProgress;
+
+    /** Alerts activation date ({@code yyyy-MM-dd}); null for legacy stores without one. */
+    private String alertsActivationDate;
 }
