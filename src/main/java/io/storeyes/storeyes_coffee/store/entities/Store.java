@@ -43,7 +43,16 @@ public class Store {
 
     @Column(name = "status", nullable = false)
     private StoreStatus status;
-    
+
+    // Per-store visibility of alert types shown in the mobile app (see V26 migration)
+    @Builder.Default
+    @Column(name = "not_tapped_alerts_enabled", nullable = false, columnDefinition = "boolean not null default true")
+    private boolean notTappedAlertsEnabled = true;
+
+    @Builder.Default
+    @Column(name = "return_alerts_enabled", nullable = false, columnDefinition = "boolean not null default true")
+    private boolean returnAlertsEnabled = true;
+
     @Column(name = "created_at", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
     @CreationTimestamp

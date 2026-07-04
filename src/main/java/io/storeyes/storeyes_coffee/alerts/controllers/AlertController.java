@@ -2,6 +2,7 @@ package io.storeyes.storeyes_coffee.alerts.controllers;
 
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDetailsDTO;
+import io.storeyes.storeyes_coffee.alerts.dto.AlertSettingsDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.UpdateHumanJudgementRequest;
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
 import io.storeyes.storeyes_coffee.alerts.entities.AlertType;
@@ -36,6 +37,15 @@ public class AlertController {
         List<Alert> alerts = alertService.getAlertsByDate(date, endDate, unprocessed, returnType, alertType);
         List<AlertDTO> alertDTOs = alertMapper.toDTOList(alerts);
         return ResponseEntity.ok(alertDTOs);
+    }
+
+    /**
+     * Per-store alert-type visibility for the current user's selected store.
+     * GET /api/alerts/settings
+     */
+    @GetMapping("/settings")
+    public ResponseEntity<AlertSettingsDTO> getAlertSettings() {
+        return ResponseEntity.ok(alertService.getAlertSettings());
     }
 
     /**

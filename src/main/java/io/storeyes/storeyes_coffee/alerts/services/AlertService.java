@@ -2,6 +2,7 @@ package io.storeyes.storeyes_coffee.alerts.services;
 
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.AlertDetailsDTO;
+import io.storeyes.storeyes_coffee.alerts.dto.AlertSettingsDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.AlertSummaryDTO;
 import io.storeyes.storeyes_coffee.alerts.dto.CreateAlertRequest;
 import io.storeyes.storeyes_coffee.alerts.entities.Alert;
@@ -82,6 +83,17 @@ public class AlertService {
             throw new RuntimeException("Store context not found for current user");
         }
 
+        // Per-store alert-type visibility. Read from the selected store (not the demo
+        // data store): the demo mapping only redirects where alert data comes from,
+        // while the visibility configuration belongs to the real store.
+        boolean notTappedEnabled = true;
+        boolean returnEnabled = true;
+        var currentStore = storeRepository.findById(storeId).orElse(null);
+        if (currentStore != null) {
+            notTappedEnabled = currentStore.isNotTappedAlertsEnabled();
+            returnEnabled = currentStore.isReturnAlertsEnabled();
+        }
+
         // Resolve demo-store context (data store + optional fixed alert date).
         DemoStoreDataSourceResolver.AlertsDataContext alertsCtx =
                 demoStoreDataSourceResolver.resolveAlertsDataContext(storeId);
@@ -144,8 +156,13 @@ public class AlertService {
         }
 
         // Apply type / judgement filters
+        final boolean allowNotTapped = notTappedEnabled;
+        final boolean allowReturn = returnEnabled;
         return alerts.stream()
                 .filter(a -> {
+                    // Drop alert types disabled for this store (null type counts as NOT_TAPPED)
+                    boolean isReturn = a.getAlertType() == io.storeyes.storeyes_coffee.alerts.entities.AlertType.RETURN;
+                    if (isReturn ? !allowReturn : !allowNotTapped) return false;
                     // If alertType filter is set, only return matching alerts
                     if (filterAlertType != null) {
                         if (a.getAlertType() != filterAlertType) return false;
@@ -161,6 +178,21 @@ public class AlertService {
                 .collect(Collectors.toList());
     }
     
+    /**
+     * Per-store alert-type visibility for the current user's selected store.
+     * Reads the selected store directly (not the demo data store), since the
+     * visibility configuration belongs to the real store.
+     */
+    public AlertSettingsDTO getAlertSettings() {
+        long storeId = CurrentStoreContext.requireCurrentStoreId();
+        var store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new RuntimeException("Store not found with id: " + storeId));
+        return AlertSettingsDTO.builder()
+                .notTappedEnabled(store.isNotTappedAlertsEnabled())
+                .returnEnabled(store.isReturnAlertsEnabled())
+                .build();
+    }
+
     /**
      * Update human judgement directly via query
      */
