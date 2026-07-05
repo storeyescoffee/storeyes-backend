@@ -16,11 +16,6 @@ public class DailyReportDTO {
     private String businessName;
     private RevenueDTO revenue;
     private List<HourlyDataDTO> hourlyData;
-    private List<TopProductDTO> topProductsByQuantity;
-    private List<TopProductDTO> topProductsByRevenue;
-    private List<CategoryAnalysisDTO> categoryAnalysis;
     private List<StaffPerformanceDTO> staffPerformance;
-    private List<PeakPeriodDTO> peakPeriods;
-    private InsightsDTO insights;
 }
 
