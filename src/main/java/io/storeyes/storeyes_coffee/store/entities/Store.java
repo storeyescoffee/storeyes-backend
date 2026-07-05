@@ -54,9 +54,19 @@ public class Store {
     private boolean returnAlertsEnabled = true;
 
     /**
-     * Alerts stay locked until this date (default: creation + 3 weeks, set in {@link #prePersist()}).
-     * Null is treated as active (legacy stores created before V27). Managed via SQL, e.g.
-     * {@code UPDATE stores SET alerts_activation_date = NOW() WHERE code = '...';}
+     * Real-world date the store's hardware/cameras were installed (see V28 migration).
+     * Anchor for {@link #alertsActivationDate}'s default and for the activation progress
+     * calculation; independent from {@link #createdAt} since the DB row may be created
+     * before or after the actual installation. Defaults to now() in {@link #prePersist()}.
+     * Managed via SQL, e.g. {@code UPDATE stores SET installation_date = '2026-06-20' WHERE code = '...';}
+     */
+    @Column(name = "installation_date")
+    private LocalDateTime installationDate;
+
+    /**
+     * Alerts stay locked until this date (default: {@link #installationDate} + 3 weeks, set
+     * in {@link #prePersist()}). Null is treated as active (legacy stores created before V27).
+     * Managed via SQL, e.g. {@code UPDATE stores SET alerts_activation_date = NOW() WHERE code = '...';}
      */
     @Column(name = "alerts_activation_date")
     private LocalDateTime alertsActivationDate;
@@ -77,8 +87,11 @@ public class Store {
         if (this.status == null) {
             this.status = StoreStatus.NEW;
         }
+        if (this.installationDate == null) {
+            this.installationDate = LocalDateTime.now();
+        }
         if (this.alertsActivationDate == null) {
-            this.alertsActivationDate = LocalDateTime.now().plusWeeks(3);
+            this.alertsActivationDate = this.installationDate.plusWeeks(3);
         }
     }
 

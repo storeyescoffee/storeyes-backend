@@ -56,7 +56,7 @@ public class HomeSummaryService {
         boolean notTappedEnabled = store == null || store.isNotTappedAlertsEnabled();
         boolean returnEnabled = store == null || store.isReturnAlertsEnabled();
 
-        // Alerts activation: locked until alerts_activation_date (default creation + 3 weeks).
+        // Alerts activation: locked until alerts_activation_date (default installation + 3 weeks).
         // Null activation date (legacy stores) counts as active.
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime activationDate = store != null ? store.getAlertsActivationDate() : null;
@@ -65,8 +65,10 @@ public class HomeSummaryService {
         if (alertsActive) {
             activationProgress = 100;
         } else {
-            LocalDateTime start = store.getCreatedAt() != null
-                    ? store.getCreatedAt()
+            // Progress is measured from the store's real-world installation date, not
+            // created_at, since the DB row can be created before/after the actual install.
+            LocalDateTime start = store.getInstallationDate() != null
+                    ? store.getInstallationDate()
                     : activationDate.minusWeeks(3);
             long totalSeconds = Duration.between(start, activationDate).getSeconds();
             long elapsedSeconds = Duration.between(start, now).getSeconds();
