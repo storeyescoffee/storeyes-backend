@@ -45,6 +45,10 @@ public class VariableChargeSubCategory {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
 
+    @Builder.Default
+    @Column(name = "is_active", nullable = false)
+    private Boolean active = true;
+
     @Column(name = "created_at", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
     @CreationTimestamp

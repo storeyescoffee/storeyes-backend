@@ -1,6 +1,5 @@
 package io.storeyes.storeyes_coffee.charges.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,9 +10,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateVariableChargeSubCategoryRequest {
+public class UpdateVariableChargeSubCategoryRequest {
 
-    @NotBlank(message = "Name is required")
     @Size(max = 255, message = "Name must not exceed 255 characters")
     private String name;
 
@@ -21,4 +19,6 @@ public class CreateVariableChargeSubCategoryRequest {
     private String code;
 
     private Integer sortOrder;
+
+    private Boolean active;
 }

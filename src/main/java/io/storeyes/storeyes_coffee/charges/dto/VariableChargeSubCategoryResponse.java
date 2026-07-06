@@ -18,6 +18,7 @@ public class VariableChargeSubCategoryResponse {
     private String name;
     private String code;
     private Integer sortOrder;
+    private Boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

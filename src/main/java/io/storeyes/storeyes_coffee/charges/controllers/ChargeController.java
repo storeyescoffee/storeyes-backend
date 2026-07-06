@@ -529,13 +529,14 @@ public class ChargeController {
     }
 
     /**
-     * Create a child sub-category under an existing sub-category.
-     * POST /api/charges/variable/sub-categories
+     * Create a top-level sub-category directly under a main category (e.g. add "Raw materials" under "Stock").
+     * POST /api/charges/variable/main-categories/{mainCategoryId}/sub-categories
      */
-    @PostMapping("/variable/sub-categories")
+    @PostMapping("/variable/main-categories/{mainCategoryId}/sub-categories")
     public ResponseEntity<Map<String, Object>> createVariableChargeSubCategory(
+            @PathVariable Long mainCategoryId,
             @RequestBody @Valid CreateVariableChargeSubCategoryRequest request) {
-        VariableChargeSubCategoryResponse sub = chargeService.createVariableChargeSubCategory(request);
+        VariableChargeSubCategoryResponse sub = chargeService.createVariableChargeSubCategory(mainCategoryId, request);
         Map<String, Object> response = new HashMap<>();
         response.put("data", sub);
         response.put("message", "Sub-category created successfully");
@@ -558,6 +559,22 @@ public class ChargeController {
     }
 
     /**
+     * Create a child sub-category (a "sub-sub-category") under an existing top-level sub-category.
+     * POST /api/charges/variable/sub-categories/{subCategoryId}/children
+     */
+    @PostMapping("/variable/sub-categories/{subCategoryId}/children")
+    public ResponseEntity<Map<String, Object>> createVariableChargeSubSubCategory(
+            @PathVariable Long subCategoryId,
+            @RequestBody @Valid CreateVariableChargeSubCategoryRequest request) {
+        VariableChargeSubCategoryResponse sub = chargeService.createVariableChargeSubSubCategory(subCategoryId, request);
+        Map<String, Object> response = new HashMap<>();
+        response.put("data", sub);
+        response.put("message", "Sub-sub-category created successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
      * Get child sub-categories of a sub-category (e.g. for Raw materials: Bar, Cuisine, Congelateur, Soda).
      * GET /api/charges/variable/sub-categories/{subCategoryId}/children
      */
@@ -567,6 +584,23 @@ public class ChargeController {
         Map<String, Object> response = new HashMap<>();
         response.put("data", children);
         response.put("message", "Sub-category children retrieved successfully");
+        response.put("timestamp", java.time.OffsetDateTime.now());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Update (rename/reorder) a sub-category or sub-sub-category, and/or toggle its active status.
+     * Deactivating a top-level sub-category cascades to deactivate its sub-sub-category children.
+     * PUT /api/charges/variable/sub-categories/{id}
+     */
+    @PutMapping("/variable/sub-categories/{id}")
+    public ResponseEntity<Map<String, Object>> updateVariableChargeSubCategory(
+            @PathVariable Long id,
+            @RequestBody @Valid UpdateVariableChargeSubCategoryRequest request) {
+        VariableChargeSubCategoryResponse sub = chargeService.updateVariableChargeSubCategory(id, request);
+        Map<String, Object> response = new HashMap<>();
+        response.put("data", sub);
+        response.put("message", "Sub-category updated successfully");
         response.put("timestamp", java.time.OffsetDateTime.now());
         return ResponseEntity.ok(response);
     }

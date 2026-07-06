@@ -976,16 +976,45 @@ public class ChargeService {
     }
 
     /**
-     * Create a child sub-category under an existing sub-category (e.g. add "Pastry" under "Raw materials").
-     * POST /api/charges/variable/sub-categories
+     * Create a top-level sub-category directly under a main category (e.g. add "Raw materials" under "Stock").
+     * POST /api/charges/variable/main-categories/{mainCategoryId}/sub-categories
      */
     @Transactional
-    public VariableChargeSubCategoryResponse createVariableChargeSubCategory(CreateVariableChargeSubCategoryRequest request) {
+    public VariableChargeSubCategoryResponse createVariableChargeSubCategory(Long mainCategoryId, CreateVariableChargeSubCategoryRequest request) {
         Long storeId = getChargesDataStoreId();
-        VariableChargeSubCategory parent = variableChargeSubCategoryRepository.findById(request.getParentSubCategoryId())
-                .orElseThrow(() -> new RuntimeException("Parent sub-category not found with id: " + request.getParentSubCategoryId()));
+        VariableChargeMainCategory mainCategory = variableChargeMainCategoryRepository.findById(mainCategoryId)
+                .orElseThrow(() -> new RuntimeException("Variable charge main category not found with id: " + mainCategoryId));
+        if (!mainCategory.getStore().getId().equals(storeId)) {
+            throw new RuntimeException("Variable charge main category not found with id: " + mainCategoryId);
+        }
+
+        VariableChargeSubCategory sub = VariableChargeSubCategory.builder()
+                .mainCategory(mainCategory)
+                .parentSubCategory(null)
+                .name(request.getName().trim())
+                .code(request.getCode() != null && !request.getCode().isBlank() ? request.getCode().trim() : null)
+                .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0)
+                .active(true)
+                .build();
+
+        return toVariableChargeSubCategoryResponse(variableChargeSubCategoryRepository.save(sub));
+    }
+
+    /**
+     * Create a child sub-category (a "sub-sub-category") under an existing top-level sub-category
+     * (e.g. add "Pastry" under "Raw materials").
+     * POST /api/charges/variable/sub-categories/{subCategoryId}/children
+     */
+    @Transactional
+    public VariableChargeSubCategoryResponse createVariableChargeSubSubCategory(Long parentSubCategoryId, CreateVariableChargeSubCategoryRequest request) {
+        Long storeId = getChargesDataStoreId();
+        VariableChargeSubCategory parent = variableChargeSubCategoryRepository.findById(parentSubCategoryId)
+                .orElseThrow(() -> new RuntimeException("Parent sub-category not found with id: " + parentSubCategoryId));
         if (!parent.getMainCategory().getStore().getId().equals(storeId)) {
-            throw new RuntimeException("Parent sub-category not found with id: " + request.getParentSubCategoryId());
+            throw new RuntimeException("Parent sub-category not found with id: " + parentSubCategoryId);
+        }
+        if (parent.getParentSubCategory() != null) {
+            throw new RuntimeException("Cannot create a sub-sub-category under a sub-sub-category: " + parentSubCategoryId);
         }
 
         VariableChargeSubCategory sub = VariableChargeSubCategory.builder()
@@ -994,9 +1023,49 @@ public class ChargeService {
                 .name(request.getName().trim())
                 .code(request.getCode() != null && !request.getCode().isBlank() ? request.getCode().trim() : null)
                 .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0)
+                .active(true)
                 .build();
 
         return toVariableChargeSubCategoryResponse(variableChargeSubCategoryRepository.save(sub));
+    }
+
+    /**
+     * Update (rename/reorder) a sub-category or sub-sub-category, and/or toggle its active status.
+     * Deactivating a top-level sub-category cascades to deactivate its sub-sub-category children;
+     * reactivating does NOT cascade-reactivate children (they must be reactivated individually).
+     * PUT /api/charges/variable/sub-categories/{id}
+     */
+    @Transactional
+    public VariableChargeSubCategoryResponse updateVariableChargeSubCategory(Long id, UpdateVariableChargeSubCategoryRequest request) {
+        Long storeId = getChargesDataStoreId();
+        VariableChargeSubCategory sub = variableChargeSubCategoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Variable charge sub-category not found with id: " + id));
+        if (!sub.getMainCategory().getStore().getId().equals(storeId)) {
+            throw new RuntimeException("Variable charge sub-category not found with id: " + id);
+        }
+
+        if (request.getName() != null) {
+            sub.setName(request.getName().trim());
+        }
+        if (request.getCode() != null) {
+            sub.setCode(request.getCode().trim().isEmpty() ? null : request.getCode().trim());
+        }
+        if (request.getSortOrder() != null) {
+            sub.setSortOrder(request.getSortOrder());
+        }
+        if (request.getActive() != null && !request.getActive().equals(sub.getActive())) {
+            sub.setActive(request.getActive());
+            if (!request.getActive() && sub.getParentSubCategory() == null) {
+                List<VariableChargeSubCategory> children = variableChargeSubCategoryRepository
+                        .findByParentSubCategoryIdOrderBySortOrderAsc(sub.getId());
+                for (VariableChargeSubCategory child : children) {
+                    child.setActive(false);
+                }
+            }
+        }
+
+        VariableChargeSubCategory updated = variableChargeSubCategoryRepository.save(sub);
+        return toVariableChargeSubCategoryResponse(updated);
     }
 
     /**
@@ -1039,6 +1108,7 @@ public class ChargeService {
                 .name(sub.getName())
                 .code(sub.getCode())
                 .sortOrder(sub.getSortOrder())
+                .active(sub.getActive())
                 .createdAt(sub.getCreatedAt())
                 .updatedAt(sub.getUpdatedAt())
                 .build();
