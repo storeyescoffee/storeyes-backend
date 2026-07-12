@@ -20,4 +20,6 @@ public class FeedbackProfileDTO {
     private String googleReviewUrl;
     /** Active questions in display order — populated for the kiosk (getByCode), null elsewhere. */
     private List<FeedbackQuestionDTO> questions;
+    /** Per-store availability of the multi-questions feature (see Store.multipleQuestionsEnabled). */
+    private boolean multipleQuestionsEnabled;
 }

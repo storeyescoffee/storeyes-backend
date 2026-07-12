@@ -152,6 +152,7 @@ public class FeedbackService {
                         .storeName(p.getStoreName())
                         .logoUrl(p.getLogoUrl())
                         .googleReviewUrl(p.getGoogleReviewUrl())
+                        .multipleQuestionsEnabled(p.getStore().isMultipleQuestionsEnabled())
                         .build())
                 .orElse(null);
 

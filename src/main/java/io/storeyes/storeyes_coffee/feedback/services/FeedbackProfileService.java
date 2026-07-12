@@ -38,11 +38,13 @@ public class FeedbackProfileService {
         FeedbackProfile profile = feedbackProfileRepository.findByCode(code)
                 .orElseThrow(() -> new RuntimeException("FeedbackProfile not found: " + code));
 
-        List<FeedbackQuestionDTO> questions = feedbackQuestionRepository
-                .findByFeedbackProfileIdAndIsActiveTrueOrderByDisplayOrderAsc(profile.getId())
-                .stream()
-                .map(feedbackQuestionService::toDTO)
-                .collect(Collectors.toList());
+        List<FeedbackQuestionDTO> questions = profile.getStore().isMultipleQuestionsEnabled()
+                ? feedbackQuestionRepository
+                        .findByFeedbackProfileIdAndIsActiveTrueOrderByDisplayOrderAsc(profile.getId())
+                        .stream()
+                        .map(feedbackQuestionService::toDTO)
+                        .collect(Collectors.toList())
+                : List.of();
 
         return toDTO(profile, questions);
     }
@@ -146,6 +148,7 @@ public class FeedbackProfileService {
                 .logoUrl(p.getLogoUrl())
                 .googleReviewUrl(p.getGoogleReviewUrl())
                 .questions(questions)
+                .multipleQuestionsEnabled(p.getStore().isMultipleQuestionsEnabled())
                 .build();
     }
 }

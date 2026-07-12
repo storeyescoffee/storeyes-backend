@@ -53,6 +53,11 @@ public class Store {
     @Column(name = "return_alerts_enabled", nullable = false, columnDefinition = "boolean not null default true")
     private boolean returnAlertsEnabled = true;
 
+    // Per-store availability of the multi-questions feedback feature (see V30 migration)
+    @Builder.Default
+    @Column(name = "multiple_questions_enabled", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean multipleQuestionsEnabled = false;
+
     /**
      * Real-world date the store's hardware/cameras were installed (see V28 migration).
      * Anchor for {@link #alertsActivationDate}'s default and for the activation progress

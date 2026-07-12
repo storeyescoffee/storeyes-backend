@@ -16,12 +16,17 @@ public interface StockProductRepository extends JpaRepository<StockProduct, Long
     @Query("SELECT DISTINCT p FROM StockProduct p JOIN FETCH p.subCategory WHERE p.store.id = :storeId ORDER BY p.name ASC")
     List<StockProduct> findByStoreIdWithSubCategoryOrderByNameAsc(@Param("storeId") Long storeId);
 
-    /** Bar / kitchen / freezer / soda only — same filter as inventory summary (case-insensitive codes). */
+    /**
+     * Products under the "Raw materials" sub-category tree only (the sub-category itself or any of its
+     * children, e.g. Bar / Kitchen / Freezer / Soda or any custom category the store owner creates) —
+     * same filter as inventory summary (case-insensitive code).
+     */
     @Query("""
             SELECT DISTINCT p FROM StockProduct p
             JOIN FETCH p.subCategory sc
+            LEFT JOIN sc.parentSubCategory psc
             WHERE p.store.id = :storeId
-              AND LOWER(sc.code) IN ('bar', 'kitchen', 'freezer', 'soda')
+              AND (LOWER(sc.code) = 'raw_materials' OR LOWER(psc.code) = 'raw_materials')
             ORDER BY p.name ASC
             """)
     List<StockProduct> findRawMaterialProductsByStoreIdOrderByNameAsc(@Param("storeId") Long storeId);

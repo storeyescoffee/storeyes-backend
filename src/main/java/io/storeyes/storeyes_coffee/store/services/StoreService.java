@@ -1,5 +1,9 @@
 package io.storeyes.storeyes_coffee.store.services;
 
+import io.storeyes.storeyes_coffee.charges.entities.VariableChargeMainCategory;
+import io.storeyes.storeyes_coffee.charges.entities.VariableChargeSubCategory;
+import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeMainCategoryRepository;
+import io.storeyes.storeyes_coffee.charges.repositories.VariableChargeSubCategoryRepository;
 import io.storeyes.storeyes_coffee.store.dto.CreateStoreRequest;
 import io.storeyes.storeyes_coffee.store.dto.PaginatedResponse;
 import io.storeyes.storeyes_coffee.store.dto.StoreDTO;
@@ -24,11 +28,13 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class StoreService {
-    
+
     private final StoreRepository storeRepository;
     private final StoreMapper storeMapper;
     private final RoleMappingRepository roleMappingRepository;
-    
+    private final VariableChargeMainCategoryRepository variableChargeMainCategoryRepository;
+    private final VariableChargeSubCategoryRepository variableChargeSubCategoryRepository;
+
     /**
      * Create a new store
      */
@@ -37,7 +43,7 @@ public class StoreService {
         if (storeRepository.findByCode(request.getCode()).isPresent()) {
             throw new RuntimeException("Store with code " + request.getCode() + " already exists");
         }
-        
+
         Store store = Store.builder()
                 .code(request.getCode())
                 .name(request.getName())
@@ -47,9 +53,39 @@ public class StoreService {
                 .type(request.getType())
                 .status(request.getStatus() != null ? request.getStatus() : StoreStatus.NEW)
                 .build();
-        
+
         Store savedStore = storeRepository.save(store);
+        ensureDefaultStockCategories(savedStore);
         return storeMapper.toDTO(savedStore);
+    }
+
+    /**
+     * Ensures the store has the "Stock" main category and "Raw materials" sub-category that the
+     * mobile inventory feature relies on (see StockProductRepository.findRawMaterialProductsByStoreIdOrderByNameAsc).
+     * Idempotent — safe to call on a store that already has them.
+     */
+    private void ensureDefaultStockCategories(Store store) {
+        VariableChargeMainCategory stockCategory = variableChargeMainCategoryRepository
+                .findByStore_IdAndCodeIgnoreCase(store.getId(), "stock")
+                .orElseGet(() -> variableChargeMainCategoryRepository.save(
+                        VariableChargeMainCategory.builder()
+                                .store(store)
+                                .name("Stock")
+                                .code("stock")
+                                .sortOrder(1)
+                                .build()));
+
+        variableChargeSubCategoryRepository
+                .findByMainCategory_IdAndCodeIgnoreCase(stockCategory.getId(), "raw_materials")
+                .orElseGet(() -> variableChargeSubCategoryRepository.save(
+                        VariableChargeSubCategory.builder()
+                                .mainCategory(stockCategory)
+                                .parentSubCategory(null)
+                                .name("Raw materials")
+                                .code("raw_materials")
+                                .sortOrder(1)
+                                .active(true)
+                                .build()));
     }
     
     /**

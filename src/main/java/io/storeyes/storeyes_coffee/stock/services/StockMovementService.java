@@ -127,17 +127,21 @@ public class StockMovementService {
             return;
         }
 
-        // Only track raw-material stock products in stock tables (bar, kitchen, freezer, soda).
+        // Only track products under the "Raw materials" sub-category tree in stock tables
+        // (the sub-category itself, or any of its children — bar/kitchen/freezer/soda or custom ones).
         String subCategoryCode = null;
-        if (charge.getProduct() != null
-                && charge.getProduct().getSubCategory() != null
-                && charge.getProduct().getSubCategory().getCode() != null) {
-            subCategoryCode = charge.getProduct().getSubCategory().getCode().toLowerCase();
+        String parentSubCategoryCode = null;
+        if (charge.getProduct() != null && charge.getProduct().getSubCategory() != null) {
+            var subCategory = charge.getProduct().getSubCategory();
+            if (subCategory.getCode() != null) {
+                subCategoryCode = subCategory.getCode().toLowerCase();
+            }
+            if (subCategory.getParentSubCategory() != null && subCategory.getParentSubCategory().getCode() != null) {
+                parentSubCategoryCode = subCategory.getParentSubCategory().getCode().toLowerCase();
+            }
         }
-        boolean isRawMaterialProduct = "bar".equals(subCategoryCode)
-                || "kitchen".equals(subCategoryCode)
-                || "freezer".equals(subCategoryCode)
-                || "soda".equals(subCategoryCode);
+        boolean isRawMaterialProduct = "raw_materials".equals(subCategoryCode)
+                || "raw_materials".equals(parentSubCategoryCode);
 
         // If product is not a raw material, ensure no purchase movement exists and exit.
         if (!isRawMaterialProduct) {
