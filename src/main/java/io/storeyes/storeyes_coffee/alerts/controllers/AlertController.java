@@ -53,19 +53,14 @@ public class AlertController {
      * PATCH /api/alerts/{id}/human-judgement
      */
     @PatchMapping("/{id}/human-judgement")
-    public ResponseEntity<?> updateHumanJudgement(
+    public ResponseEntity<Void> updateHumanJudgement(
             @PathVariable Long id,
             @Valid @RequestBody UpdateHumanJudgementRequest request) {
         boolean updated = alertService.updateHumanJudgement(id, request.getHumanJudgement());
-        
-        if (updated) {
-            // Fetch and return the updated alert
-            Alert updatedAlert = alertService.getAlertById(id);
-            return ResponseEntity.ok(updatedAlert);
-        } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Alert not found with id: " + id);
-        }
+
+        return updated
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     }
     
     /**
@@ -77,11 +72,11 @@ public class AlertController {
      * If omitted for a demo store, today's date is used.</p>
      */
     @GetMapping("/{id}")
-    public ResponseEntity<Alert> getAlertById(
+    public ResponseEntity<AlertDTO> getAlertById(
             @PathVariable Long id,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         Alert alert = alertService.getAlertById(id, date);
-        return ResponseEntity.ok(alert);
+        return ResponseEntity.ok(alertMapper.toDTO(alert));
     }
 
     /**
