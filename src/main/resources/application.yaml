@@ -54,6 +54,11 @@ spring:
           writetimeout: 10000
 
 app:
+  # Attendance pushes go to these roles in the store the punch came from (case-insensitive against
+  # roles.name), minus excluded-user-id. Blank excluded-user-id notifies everyone holding the roles.
+  attendance-notifications:
+    roles: ${ATTENDANCE_NOTIFICATION_ROLES:OWNER,MANAGER}
+    excluded-user-id: ${ATTENDANCE_NOTIFICATION_EXCLUDED_USER_ID:f64832d4-6f5b-491a-ad59-641a5614fbc0}
   password-reset:
     pepper: ${PASSWORD_RESET_PEPPER:storeyes-dev-pepper-change-in-production}
     code-ttl-minutes: ${PASSWORD_RESET_CODE_TTL_MINUTES:15}

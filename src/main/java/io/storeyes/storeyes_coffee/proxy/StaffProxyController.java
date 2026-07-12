@@ -8,9 +8,12 @@ import io.storeyes.storeyes_coffee.notification.services.FcmNotificationService;
 import io.storeyes.storeyes_coffee.rolemapping.repositories.RoleMappingRepository;
 import io.storeyes.storeyes_coffee.security.DeviceContext;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
+import io.storeyes.storeyes_coffee.store.entities.Store;
+import io.storeyes.storeyes_coffee.store.repositories.StoreRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,7 +37,6 @@ public class StaffProxyController {
     private static final String TARGET_BASE = "http://10.0.48.56:8080";
     private static final String STORE_CODE_HEADER = "X-STORE-CODE";
     private static final String EMPLOYEE_LOGS_PATH = "/api/staff/employee-logs";
-    private static final String ATTENDANCE_OWNER_ID = "f2e75dab-2812-40d1-9f90-25f66675b311";
     private static final Set<String> HOP_BY_HOP = Set.of(
             "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
             "te", "trailers", "transfer-encoding", "upgrade", "host"
@@ -43,8 +45,17 @@ public class StaffProxyController {
     private final RestTemplate restTemplate;
     private final RoleMappingRepository roleMappingRepository;
     private final FirebaseToken2Repository firebaseToken2Repository;
+    private final StoreRepository storeRepository;
     private final Optional<FcmNotificationService> fcmNotificationService;
     private final ObjectMapper objectMapper;
+
+    /** Roles notified of attendance, matched case-insensitively against {@code roles.name}. */
+    @Value("${app.attendance-notifications.roles:OWNER,MANAGER}")
+    private List<String> notifiedRoles;
+
+    /** User never notified of attendance, whatever their role. Blank to notify everyone. */
+    @Value("${app.attendance-notifications.excluded-user-id:}")
+    private String excludedUserId;
 
     @RequestMapping("/api/staff/**")
     public ResponseEntity<byte[]> proxy(HttpServletRequest request) throws IOException {
@@ -75,7 +86,7 @@ public class StaffProxyController {
             boolean isEmployeeLogs = HttpMethod.POST.matches(request.getMethod())
                     && request.getRequestURI().startsWith(EMPLOYEE_LOGS_PATH);
             if (isEmployeeLogs && response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return augmentWithNotificationResult(response);
+                return augmentWithNotificationResult(response, storeCode);
             }
 
             return response;
@@ -91,10 +102,10 @@ public class StaffProxyController {
      * {@code "notificationResult": { "tokens": N, "notified": M }} so the caller can see how many
      * devices were reached. Returns the original response untouched if anything goes wrong.
      */
-    private ResponseEntity<byte[]> augmentWithNotificationResult(ResponseEntity<byte[]> response) {
+    private ResponseEntity<byte[]> augmentWithNotificationResult(ResponseEntity<byte[]> response, String storeCode) {
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
-            NotificationResult result = dispatchAttendanceNotifications(root);
+            NotificationResult result = dispatchAttendanceNotifications(root, storeCode);
 
             if (!(root instanceof ObjectNode obj)) {
                 return response;
@@ -116,13 +127,15 @@ public class StaffProxyController {
     }
 
     /**
-     * Sends the attendance push(es) described by the {@code notifications} block of the upstream body.
+     * Sends the attendance push(es) described by the {@code notifications} block of the upstream body
+     * to the {@link #notifiedRoles} of {@code storeCode} — the store the request acted on — less
+     * {@link #excludedUserId}.
      *
      * @return the number of target device tokens and how many sends succeeded. For grouped mode
      *         {@code notified} is the count of devices reached (≤ tokens); for per-employee mode it is
      *         the sum of successful sends across all items (one push per item per device).
      */
-    private NotificationResult dispatchAttendanceNotifications(JsonNode root) {
+    private NotificationResult dispatchAttendanceNotifications(JsonNode root, String storeCode) {
         JsonNode notif = root.path("notifications");
         if (notif.isMissingNode() || !notif.path("send").asBoolean(false)) return NotificationResult.NONE;
         if (notif.path("dndSuppressed").asBoolean(false)) {
@@ -135,9 +148,8 @@ public class StaffProxyController {
             return NotificationResult.NONE;
         }
 
-        List<String> tokens = firebaseToken2Repository.findActiveTokensByUserId(ATTENDANCE_OWNER_ID);
+        List<String> tokens = resolveRecipientTokens(storeCode);
         if (tokens.isEmpty()) {
-            log.debug("No active tokens for userId={}", ATTENDANCE_OWNER_ID);
             return NotificationResult.NONE;
         }
 
@@ -172,6 +184,40 @@ public class StaffProxyController {
             log.debug("Sent {} per-employee attendance notification(s): {}", sent.size(), sent);
         }
         return new NotificationResult(tokens.size(), notified);
+    }
+
+    /**
+     * Active tokens of everyone holding a {@link #notifiedRoles} role in the store the request acted on,
+     * minus {@link #excludedUserId}. Empty when the store is unknown, so an unattributable attendance
+     * event notifies nobody rather than notifying the wrong store.
+     */
+    private List<String> resolveRecipientTokens(String storeCode) {
+        if (storeCode == null || storeCode.isBlank()) {
+            log.warn("No store resolved for attendance event — notifying nobody");
+            return List.of();
+        }
+
+        Long storeId = storeRepository.findByCode(storeCode).map(Store::getId).orElse(null);
+        if (storeId == null) {
+            log.warn("No store registered for code={} — notifying nobody", storeCode);
+            return List.of();
+        }
+
+        List<String> roles = notifiedRoles.stream()
+                .map(role -> role.trim().toUpperCase())
+                .filter(role -> !role.isEmpty())
+                .toList();
+        String excluded = (excludedUserId == null || excludedUserId.isBlank()) ? null : excludedUserId.trim();
+
+        List<String> tokens = firebaseToken2Repository.findActiveTokensByStoreIdAndRolesExcludingUser(
+                storeId, roles, excluded);
+        if (tokens.isEmpty()) {
+            log.debug("No active tokens for roles={} in store={} (excluding userId={})", roles, storeCode, excluded);
+        } else {
+            log.debug("Attendance recipients: {} token(s) for roles={} in store={} (excluding userId={})",
+                    tokens.size(), roles, storeCode, excluded);
+        }
+        return tokens;
     }
 
     private record NotificationResult(int tokens, int notified) {
