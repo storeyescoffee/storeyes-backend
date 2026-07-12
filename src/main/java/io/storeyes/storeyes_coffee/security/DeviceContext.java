@@ -5,7 +5,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
- * Holds the store resolved from the calling device by {@link DeviceAuthInterceptor}, for requests
+ * Holds the store resolved from the calling device by {@link DeviceAuthenticationFilter}, for requests
  * that authenticated by {@code X-DEVICE-ID} rather than by JWT. The device counterpart of
  * {@link CurrentStoreContext}.
  *

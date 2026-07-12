@@ -6,8 +6,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.storeyes.storeyes_coffee.firebase.repositories.FirebaseToken2Repository;
 import io.storeyes.storeyes_coffee.notification.services.FcmNotificationService;
 import io.storeyes.storeyes_coffee.rolemapping.repositories.RoleMappingRepository;
-import io.storeyes.storeyes_coffee.security.DeviceAuthInterceptor;
-import io.storeyes.storeyes_coffee.security.DeviceAuthenticated;
 import io.storeyes.storeyes_coffee.security.DeviceContext;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,7 +34,6 @@ public class StaffProxyController {
     private static final String TARGET_BASE = "http://10.0.48.56:8080";
     private static final String STORE_CODE_HEADER = "X-STORE-CODE";
     private static final String EMPLOYEE_LOGS_PATH = "/api/staff/employee-logs";
-    private static final String PUNCH_PATH = "/api/staff/employee-logs/punch";
     private static final String ATTENDANCE_OWNER_ID = "f2e75dab-2812-40d1-9f90-25f66675b311";
     private static final Set<String> HOP_BY_HOP = Set.of(
             "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
@@ -48,17 +45,6 @@ public class StaffProxyController {
     private final FirebaseToken2Repository firebaseToken2Repository;
     private final Optional<FcmNotificationService> fcmNotificationService;
     private final ObjectMapper objectMapper;
-
-    /**
-     * Punch only ever comes from a shop-floor board, so it is closed to users: a registered
-     * {@code X-DEVICE-ID} is the only way in and any JWT is ignored. By the time we get here
-     * {@link DeviceAuthInterceptor} has resolved the device's store, or rejected the request with 401.
-     */
-    @DeviceAuthenticated(deviceOnly = true)
-    @RequestMapping(PUNCH_PATH)
-    public ResponseEntity<byte[]> punch(HttpServletRequest request) throws IOException {
-        return forward(request);
-    }
 
     @RequestMapping("/api/staff/**")
     public ResponseEntity<byte[]> proxy(HttpServletRequest request) throws IOException {

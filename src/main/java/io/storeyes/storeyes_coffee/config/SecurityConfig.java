@@ -1,7 +1,10 @@
 package io.storeyes.storeyes_coffee.config;
 
+import io.storeyes.storeyes_coffee.device.repositories.DeviceRepository;
+import io.storeyes.storeyes_coffee.security.DeviceAuthenticationFilter;
 import io.storeyes.storeyes_coffee.security.KeycloakJwtAuthenticationConverter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -34,6 +37,12 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private final DeviceRepository deviceRepository;
+
+    public SecurityConfig(DeviceRepository deviceRepository) {
+        this.deviceRepository = deviceRepository;
+    }
 
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
     private String issuerUri;
@@ -98,7 +107,12 @@ public class SecurityConfig {
                     );
                 })
             )
-            
+
+            // Authenticate registered boards by X-DEVICE-ID, after the bearer filter so a JWT wins.
+            // Deliberately not a bean: Boot would also register it in the plain servlet filter chain.
+            .addFilterAfter(new DeviceAuthenticationFilter(deviceRepository),
+                    BearerTokenAuthenticationFilter.class)
+
             // Configure authorization rules
             .authorizeHttpRequests(auth -> auth
                 // Allow CORS preflight requests
@@ -111,7 +125,11 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/sales/process").permitAll()
-                .requestMatchers("/api/staff/employee-logs/punch").permitAll()
+                // Device routes, authenticated by X-DEVICE-ID in DeviceAuthenticationFilter.
+                // Punch only ever comes from a board, so it demands the device role and no JWT gets in;
+                // work modes are also read by users, so any authenticated principal will do.
+                .requestMatchers("/api/staff/employee-logs/punch").hasRole("DEVICE")
+                .requestMatchers("/api/staff/work-modes").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/notifications/daily-kpi").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/firebase-tokens-v2/test/*").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/feedback").permitAll()
