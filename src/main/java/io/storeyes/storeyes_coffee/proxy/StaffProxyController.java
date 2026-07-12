@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.storeyes.storeyes_coffee.firebase.repositories.FirebaseToken2Repository;
 import io.storeyes.storeyes_coffee.notification.services.FcmNotificationService;
 import io.storeyes.storeyes_coffee.rolemapping.repositories.RoleMappingRepository;
+import io.storeyes.storeyes_coffee.security.DeviceAuthInterceptor;
+import io.storeyes.storeyes_coffee.security.DeviceAuthenticated;
+import io.storeyes.storeyes_coffee.security.DeviceContext;
 import io.storeyes.storeyes_coffee.security.KeycloakTokenUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +36,7 @@ public class StaffProxyController {
     private static final String TARGET_BASE = "http://10.0.48.56:8080";
     private static final String STORE_CODE_HEADER = "X-STORE-CODE";
     private static final String EMPLOYEE_LOGS_PATH = "/api/staff/employee-logs";
+    private static final String PUNCH_PATH = "/api/staff/employee-logs/punch";
     private static final String ATTENDANCE_OWNER_ID = "f2e75dab-2812-40d1-9f90-25f66675b311";
     private static final Set<String> HOP_BY_HOP = Set.of(
             "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
@@ -45,18 +49,30 @@ public class StaffProxyController {
     private final Optional<FcmNotificationService> fcmNotificationService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Punch is reachable from the shop-floor board, which has no user session: with no JWT the
+     * caller falls back to device auth and {@link DeviceAuthInterceptor} has already resolved the
+     * store (or rejected the request with 401) by the time we get here.
+     */
+    @DeviceAuthenticated
+    @RequestMapping(PUNCH_PATH)
+    public ResponseEntity<byte[]> punch(HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
     @RequestMapping("/api/staff/**")
     public ResponseEntity<byte[]> proxy(HttpServletRequest request) throws IOException {
+        return forward(request);
+    }
+
+    private ResponseEntity<byte[]> forward(HttpServletRequest request) throws IOException {
         String targetPath = request.getRequestURI().replaceFirst("/api/staff", "/api");
         String qs = request.getQueryString();
         URI targetUri = URI.create(TARGET_BASE + targetPath + (qs != null ? "?" + qs : ""));
 
         HttpHeaders headers = copyHeaders(request);
 
-        String storeCode = request.getHeader(STORE_CODE_HEADER);
-        if (storeCode == null || storeCode.isBlank()) {
-            storeCode = resolveStoreCode();
-        }
+        String storeCode = resolveStoreCode(request);
         if (storeCode != null) {
             headers.set(STORE_CODE_HEADER, storeCode);
         }
@@ -200,7 +216,22 @@ public class StaffProxyController {
         return headers;
     }
 
-    private String resolveStoreCode() {
+    /**
+     * Store the request acts on: the calling device's store when it authenticated as a device
+     * (a client-supplied X-STORE-CODE is not trusted in that case), otherwise the caller's own
+     * header, otherwise the store mapped to the authenticated user.
+     */
+    private String resolveStoreCode(HttpServletRequest request) {
+        String deviceStoreCode = DeviceContext.getStoreCode();
+        if (deviceStoreCode != null) {
+            return deviceStoreCode;
+        }
+
+        String headerStoreCode = request.getHeader(STORE_CODE_HEADER);
+        if (headerStoreCode != null && !headerStoreCode.isBlank()) {
+            return headerStoreCode;
+        }
+
         String userId = KeycloakTokenUtils.getUserId();
         if (userId == null) return null;
         return roleMappingRepository.findFirstByUser_IdOrderByStore_IdAsc(userId)
