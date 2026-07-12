@@ -20,11 +20,12 @@ import java.nio.charset.StandardCharsets;
 /**
  * Enforces device authentication on handlers marked {@link DeviceAuthenticated}.
  *
- * <p>An authenticated user wins: when a JWT is present the handler runs untouched and store context
- * comes from {@link StoreContextInterceptor} as usual. Otherwise the {@code X-DEVICE-ID} header is
- * looked up against the registered devices; the matching device's store is published on
- * {@link DeviceContext} (and as the current store id, so store-scoped code works either way).
- * A missing or unknown device id is rejected with 401 and the handler never runs.
+ * <p>An authenticated user normally wins: when a JWT is present the handler runs untouched and store
+ * context comes from {@link StoreContextInterceptor} as usual. Otherwise — or always, on a
+ * {@code deviceOnly} route — the {@code X-DEVICE-ID} header is looked up against the registered
+ * devices; the matching device's store is published on {@link DeviceContext} (and as the current
+ * store id, so store-scoped code works either way). A missing or unknown device id is rejected with
+ * 401 and the handler never runs.
  */
 @Slf4j
 @Component
@@ -39,12 +40,13 @@ public class DeviceAuthInterceptor implements HandlerInterceptor {
     public boolean preHandle(@NonNull HttpServletRequest request,
                              @NonNull HttpServletResponse response,
                              @NonNull Object handler) throws IOException {
-        if (!isDeviceAuthenticated(handler)) {
+        DeviceAuthenticated config = findConfig(handler);
+        if (config == null) {
             return true;
         }
 
-        // A real user beats the device: leave the request on the JWT path entirely.
-        if (KeycloakTokenUtils.getUserId() != null) {
+        // A real user beats the device, unless the route is closed to users altogether.
+        if (!config.deviceOnly() && KeycloakTokenUtils.getUserId() != null) {
             return true;
         }
 
@@ -69,12 +71,16 @@ public class DeviceAuthInterceptor implements HandlerInterceptor {
         return true;
     }
 
-    private boolean isDeviceAuthenticated(Object handler) {
+    /** The handler's {@link DeviceAuthenticated} config (method wins over controller), or null. */
+    private DeviceAuthenticated findConfig(Object handler) {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
-            return false;
+            return null;
         }
-        return AnnotatedElementUtils.hasAnnotation(handlerMethod.getMethod(), DeviceAuthenticated.class)
-                || AnnotatedElementUtils.hasAnnotation(handlerMethod.getBeanType(), DeviceAuthenticated.class);
+        DeviceAuthenticated config = AnnotatedElementUtils.findMergedAnnotation(
+                handlerMethod.getMethod(), DeviceAuthenticated.class);
+        return config != null
+                ? config
+                : AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getBeanType(), DeviceAuthenticated.class);
     }
 
     private boolean reject(HttpServletResponse response, String message) throws IOException {

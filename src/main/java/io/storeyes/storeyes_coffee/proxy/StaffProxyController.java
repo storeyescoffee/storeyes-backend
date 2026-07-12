@@ -50,11 +50,11 @@ public class StaffProxyController {
     private final ObjectMapper objectMapper;
 
     /**
-     * Punch is reachable from the shop-floor board, which has no user session: with no JWT the
-     * caller falls back to device auth and {@link DeviceAuthInterceptor} has already resolved the
-     * store (or rejected the request with 401) by the time we get here.
+     * Punch only ever comes from a shop-floor board, so it is closed to users: a registered
+     * {@code X-DEVICE-ID} is the only way in and any JWT is ignored. By the time we get here
+     * {@link DeviceAuthInterceptor} has resolved the device's store, or rejected the request with 401.
      */
-    @DeviceAuthenticated
+    @DeviceAuthenticated(deviceOnly = true)
     @RequestMapping(PUNCH_PATH)
     public ResponseEntity<byte[]> punch(HttpServletRequest request) throws IOException {
         return forward(request);
