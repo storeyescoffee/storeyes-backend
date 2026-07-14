@@ -9,7 +9,6 @@ import io.storeyes.storeyes_coffee.stock.dto.StockProductSupplierBrief;
 import io.storeyes.storeyes_coffee.stock.dto.UpdateStockProductRequest;
 import io.storeyes.storeyes_coffee.stock.entities.StockProduct;
 import io.storeyes.storeyes_coffee.stock.entities.SupplierStockProduct;
-import io.storeyes.storeyes_coffee.stock.repositories.RecipeIngredientRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockInventorySnapshotRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockMovementRepository;
 import io.storeyes.storeyes_coffee.stock.repositories.StockProductRepository;
@@ -37,7 +36,6 @@ public class StockProductService {
     private final VariableChargeSubCategoryRepository variableChargeSubCategoryRepository;
     private final StoreRepository storeRepository;
     private final SupplierStockProductRepository supplierStockProductRepository;
-    private final RecipeIngredientRepository recipeIngredientRepository;
     private final StockMovementRepository stockMovementRepository;
     private final StockInventorySnapshotRepository stockInventorySnapshotRepository;
     private final DemoStoreDataSourceResolver demoStoreDataSourceResolver;
@@ -50,7 +48,7 @@ public class StockProductService {
      * List products for the store (mobile and backoffice). Optional filter by subCategoryId and search.
      * GET /api/stock/products?subCategoryId=&search=
      */
-    public List<StockProductResponse> getProducts(Long subCategoryId, String search) {
+    public List<StockProductResponse> getProducts(Long subCategoryId, String search, boolean includeInactive) {
         Long storeId = getStoreId();
         Long dataStoreId = demoStoreDataSourceResolver.resolveStockDataStoreId(storeId);
         List<StockProduct> products;
@@ -69,6 +67,11 @@ public class StockProductService {
             products = stockProductRepository.findByStoreIdAndSearchText(dataStoreId, search.trim());
         } else {
             products = stockProductRepository.findByStoreIdOrderByNameAsc(dataStoreId);
+        }
+        if (!includeInactive) {
+            products = products.stream()
+                    .filter(p -> Boolean.TRUE.equals(p.getIsActive()))
+                    .collect(Collectors.toList());
         }
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId = loadSuppliersByProductId(
                 dataStoreId, products.stream().map(StockProduct::getId).collect(Collectors.toList()));
@@ -154,6 +157,7 @@ public class StockProductService {
                 .minimalThreshold(threshold)
                 .countingUnit(request.getCountingUnit() != null ? request.getCountingUnit().trim() : null)
                 .basePerCountingUnit(request.getBasePerCountingUnit())
+                .isActive(true)
                 .build();
 
         StockProduct saved = stockProductRepository.save(product);
@@ -201,6 +205,9 @@ public class StockProductService {
         if (request.getBasePerCountingUnit() != null) {
             product.setBasePerCountingUnit(request.getBasePerCountingUnit());
         }
+        if (request.getIsActive() != null) {
+            product.setIsActive(request.getIsActive());
+        }
 
         StockProduct updated = stockProductRepository.save(product);
         Map<Long, List<StockProductSupplierBrief>> suppliersByProductId =
@@ -227,7 +234,9 @@ public class StockProductService {
     }
 
     /**
-     * Delete a stock product. Store-scoped.
+     * Deactivate a stock product (soft delete). Store-scoped.
+     * Keeps all history (supplier orders, recipes, movements, charges) referencing this product
+     * intact; it just stops showing up in pickers for new selections.
      */
     @Transactional
     public void deleteProduct(Long id) {
@@ -237,9 +246,8 @@ public class StockProductService {
         if (!product.getStore().getId().equals(storeId)) {
             throw new RuntimeException("Stock product not found with id: " + id);
         }
-        supplierStockProductRepository.deleteByStockProduct_Id(id);
-        recipeIngredientRepository.deleteByProduct_Id(id);
-        stockProductRepository.deleteById(id);
+        product.setIsActive(false);
+        stockProductRepository.save(product);
     }
 
     private StockProductResponse toResponse(StockProduct product, List<StockProductSupplierBrief> suppliers) {
@@ -254,6 +262,7 @@ public class StockProductService {
                 .subCategoryName(product.getSubCategory().getName())
                 .countingUnit(product.getCountingUnit())
                 .basePerCountingUnit(product.getBasePerCountingUnit())
+                .isActive(product.getIsActive())
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
                 .suppliers(suppliers != null ? suppliers : List.of())

@@ -63,6 +63,9 @@ public class StockProduct {
     @Column(name = "base_per_counting_unit", precision = 12, scale = 4)
     private BigDecimal basePerCountingUnit;
 
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @Column(name = "created_at", nullable = false)
     @Temporal(TemporalType.TIMESTAMP)
     @CreationTimestamp

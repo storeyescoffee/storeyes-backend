@@ -26,6 +26,7 @@ public interface StockProductRepository extends JpaRepository<StockProduct, Long
             JOIN FETCH p.subCategory sc
             LEFT JOIN sc.parentSubCategory psc
             WHERE p.store.id = :storeId
+              AND p.isActive = true
               AND (LOWER(sc.code) = 'raw_materials' OR LOWER(psc.code) = 'raw_materials')
             ORDER BY p.name ASC
             """)

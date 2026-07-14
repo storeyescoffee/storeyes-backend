@@ -23,14 +23,17 @@ public class StockProductController {
 
     /**
      * List stock products (store-scoped). Optional filters: subCategoryId, search.
-     * GET /api/stock/products?subCategoryId=&search=
+     * Deactivated products are excluded unless includeInactive=true (used by the product
+     * management screen itself; every other picker keeps getting active-only for free).
+     * GET /api/stock/products?subCategoryId=&search=&includeInactive=
      * Used by backoffice and mobile (variable charge product picker, stock screens).
      */
     @GetMapping
     public ResponseEntity<Map<String, Object>> getProducts(
             @RequestParam(required = false) Long subCategoryId,
-            @RequestParam(required = false) String search) {
-        List<StockProductResponse> products = stockProductService.getProducts(subCategoryId, search);
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "false") boolean includeInactive) {
+        List<StockProductResponse> products = stockProductService.getProducts(subCategoryId, search, includeInactive);
         Map<String, Object> response = new HashMap<>();
         response.put("data", products);
         response.put("message", "Stock products retrieved successfully");
@@ -84,7 +87,8 @@ public class StockProductController {
     }
 
     /**
-     * Delete stock product.
+     * Deactivate a stock product (soft delete). History referencing it (orders, recipes,
+     * movements, charges) is kept; it just stops appearing in pickers for new selections.
      * DELETE /api/stock/products/{id}
      */
     @DeleteMapping("/{id}")

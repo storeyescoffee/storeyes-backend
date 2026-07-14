@@ -37,4 +37,6 @@ public class UpdateStockProductRequest {
 
     @DecimalMin(value = "0", inclusive = false, message = "Base per counting unit must be positive when set")
     private BigDecimal basePerCountingUnit;
+
+    private Boolean isActive;
 }

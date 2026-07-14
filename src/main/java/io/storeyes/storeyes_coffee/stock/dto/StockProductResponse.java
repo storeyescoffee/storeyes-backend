@@ -25,6 +25,7 @@ public class StockProductResponse {
     private String subCategoryName;
     private String countingUnit;
     private BigDecimal basePerCountingUnit;
+    private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     /** Active supplier links for this product (backoffice list/detail). */
