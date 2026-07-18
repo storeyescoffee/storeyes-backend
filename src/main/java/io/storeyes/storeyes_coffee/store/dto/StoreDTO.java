@@ -22,6 +22,7 @@ public class StoreDTO {
     private String city;
     private String type;
     private StoreStatus status;
+    private boolean feedbackOnlyMode;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

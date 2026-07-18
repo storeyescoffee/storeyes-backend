@@ -179,6 +179,7 @@ public class AuthService {
                                 .storeName(rm.getStore().getName())
                                 .storeCode(rm.getStore().getCode())
                                 .role(rm.getRole().getName())
+                                .feedbackOnlyMode(rm.getStore().isFeedbackOnlyMode())
                                 .build())
                         .collect(java.util.stream.Collectors.toList());
             }

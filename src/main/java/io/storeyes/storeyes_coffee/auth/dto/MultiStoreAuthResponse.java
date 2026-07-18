@@ -28,5 +28,6 @@ public class MultiStoreAuthResponse {
         private String storeName;
         private String storeCode;
         private String role;
+        private boolean feedbackOnlyMode;
     }
 }

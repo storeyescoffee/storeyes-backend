@@ -59,6 +59,15 @@ public class Store {
     private boolean multipleQuestionsEnabled = false;
 
     /**
+     * When true, the backoffice restricts the store's users to the Feedbacks page only
+     * and hides every other section (see V32 migration). Managed via SQL, e.g.
+     * {@code UPDATE stores SET feedback_only_mode = TRUE WHERE code = '...';}
+     */
+    @Builder.Default
+    @Column(name = "feedback_only_mode", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean feedbackOnlyMode = false;
+
+    /**
      * Real-world date the store's hardware/cameras were installed (see V28 migration).
      * Anchor for {@link #alertsActivationDate}'s default and for the activation progress
      * calculation; independent from {@link #createdAt} since the DB row may be created
