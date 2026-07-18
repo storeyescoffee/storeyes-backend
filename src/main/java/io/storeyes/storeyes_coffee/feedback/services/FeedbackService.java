@@ -61,6 +61,9 @@ public class FeedbackService {
         }
         int total           = feedbacks.size();
         int satisfactionPct = total == 0 ? 0 : (int) Math.round(pos * 100.0 / total);
+        // isVisiting doubles as the "clicked Leave a Google review" flag — set by the
+        // st-feedback PATCH fired from the Google review button's onClick.
+        int googleReviewClicks = (int) feedbacks.stream().filter(Feedback::isVisiting).count();
 
         // ── Daily breakdown ──────────────────────────────────────
         Map<String, int[]> dayMap = new TreeMap<>(Comparator.comparingInt(Integer::parseInt));
@@ -161,6 +164,7 @@ public class FeedbackService {
                 .pos(pos)
                 .neg(neg)
                 .satisfactionPct(satisfactionPct)
+                .googleReviewClicks(googleReviewClicks)
                 .daily(daily)
                 .reviews(reviews)
                 .profile(profile)
