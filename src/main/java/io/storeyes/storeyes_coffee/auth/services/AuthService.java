@@ -180,6 +180,7 @@ public class AuthService {
                                 .storeCode(rm.getStore().getCode())
                                 .role(rm.getRole().getName())
                                 .feedbackOnlyMode(rm.getStore().isFeedbackOnlyMode())
+                                .staffOnlyMode(rm.getStore().isStaffOnlyMode())
                                 .build())
                         .collect(java.util.stream.Collectors.toList());
             }

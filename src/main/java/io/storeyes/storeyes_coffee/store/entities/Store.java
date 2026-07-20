@@ -68,6 +68,17 @@ public class Store {
     private boolean feedbackOnlyMode = false;
 
     /**
+     * When true, the backoffice restricts the store's users to the Staff/Timekeeping
+     * section only (attendance, anomalies, planning, employees, reports, settings) and
+     * hides every other section (see V33 migration). Intended to be mutually exclusive
+     * with {@link #feedbackOnlyMode} — if both are set, feedbackOnlyMode takes priority.
+     * Managed via SQL, e.g. {@code UPDATE stores SET staff_only_mode = TRUE WHERE code = '...';}
+     */
+    @Builder.Default
+    @Column(name = "staff_only_mode", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean staffOnlyMode = false;
+
+    /**
      * Real-world date the store's hardware/cameras were installed (see V28 migration).
      * Anchor for {@link #alertsActivationDate}'s default and for the activation progress
      * calculation; independent from {@link #createdAt} since the DB row may be created
