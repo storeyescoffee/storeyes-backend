@@ -3,7 +3,7 @@ package io.storeyes.storeyes_coffee.proxy;
 import io.storeyes.storeyes_coffee.clientgw.config.ClientGwProperties;
 import io.storeyes.storeyes_coffee.security.CurrentStoreContext;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -26,7 +26,6 @@ import java.util.Set;
  * gateway requires — the frontend never sees or sends those.
  */
 @RestController
-@RequiredArgsConstructor
 public class ClientGwProxyController {
 
     private static final String PREFIX = "/api/client-gw";
@@ -43,6 +42,13 @@ public class ClientGwProxyController {
 
     private final RestTemplate restTemplate;
     private final ClientGwProperties clientGwProperties;
+
+    public ClientGwProxyController(
+            @Qualifier("clientGwRestTemplate") RestTemplate restTemplate,
+            ClientGwProperties clientGwProperties) {
+        this.restTemplate = restTemplate;
+        this.clientGwProperties = clientGwProperties;
+    }
 
     @RequestMapping(PREFIX + "/**")
     public ResponseEntity<byte[]> proxy(HttpServletRequest request) throws IOException {
