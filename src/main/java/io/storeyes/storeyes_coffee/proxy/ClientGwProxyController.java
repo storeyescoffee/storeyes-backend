@@ -34,7 +34,11 @@ public class ClientGwProxyController {
     private static final String STORE_ID_HEADER = "X-STORE-ID";
     private static final Set<String> HOP_BY_HOP = Set.of(
             "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
-            "te", "trailers", "transfer-encoding", "upgrade", "host"
+            "te", "trailers", "transfer-encoding", "upgrade", "host",
+            // client-gw is keyed on X-API-KEY/X-STORE-ID only (no JWT/cookie auth); forwarding this
+            // backoffice's own bearer token makes panel.storeyes.io try to validate it as its own JWT
+            // and reject it with 401 before ever looking at X-API-KEY.
+            "authorization", "cookie"
     );
 
     private final RestTemplate restTemplate;
