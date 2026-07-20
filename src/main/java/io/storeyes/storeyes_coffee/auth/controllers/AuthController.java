@@ -11,9 +11,14 @@ import io.storeyes.storeyes_coffee.auth.dto.AuthResponse;
 import io.storeyes.storeyes_coffee.auth.dto.LoginRequest;
 import io.storeyes.storeyes_coffee.auth.dto.LogoutRequest;
 import io.storeyes.storeyes_coffee.auth.dto.RefreshTokenRequest;
+import io.storeyes.storeyes_coffee.auth.dto.UpdateProfileRequest;
 import io.storeyes.storeyes_coffee.auth.dto.UserInfoDTO;
 import io.storeyes.storeyes_coffee.auth.exceptions.TokenRefreshException;
 import io.storeyes.storeyes_coffee.auth.services.AuthService;
+import org.springframework.web.client.HttpClientErrorException;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Authentication controller providing proxy endpoints for Keycloak authentication
@@ -217,6 +222,59 @@ public class AuthController {
             
         } catch (RuntimeException e) {
             log.warn("Failed to get user info: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+    }
+
+    private static final Pattern KC_ERROR_DESC =
+            Pattern.compile("\"errorMessage\"\\s*:\\s*\"([^\"]*)\"");
+
+    /** Best-effort parse of Keycloak Admin API JSON error body for a client-visible hint. */
+    private static String extractKeycloakErrorMessage(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        Matcher m = KC_ERROR_DESC.matcher(json);
+        return m.find() ? m.group(1).replace("\\\"", "\"") : null;
+    }
+
+    /**
+     * Update current user's profile (email, username, first name, last name)
+     *
+     * PUT /auth/me
+     *
+     * Requires: Authentication (JWT token in Authorization header)
+     *
+     * Request body:
+     * {
+     *   "email": "user@example.com",
+     *   "username": "johndoe",
+     *   "firstName": "John",
+     *   "lastName": "Doe"
+     * }
+     */
+    @PutMapping("/me")
+    public ResponseEntity<?> updateCurrentUser(@Valid @RequestBody UpdateProfileRequest request) {
+        try {
+            UserInfoDTO updated = authService.updateUserInfo(request);
+            return ResponseEntity.ok(updated);
+        } catch (IllegalStateException e) {
+            log.warn("Profile update refused: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(new AuthErrorResponse("not_configured", e.getMessage()));
+        } catch (HttpClientErrorException e) {
+            log.warn("Keycloak error during profile update: {} — {}", e.getStatusCode(), e.getResponseBodyAsString());
+            String hint = extractKeycloakErrorMessage(e.getResponseBodyAsString());
+            if (e.getStatusCode().value() == 409) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(new AuthErrorResponse(
+                                "conflict", hint != null ? hint : "Email or username is already in use"));
+            }
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(new AuthErrorResponse(
+                            "keycloak_error", hint != null ? hint : "Could not update profile"));
+        } catch (RuntimeException e) {
+            log.warn("Failed to update user info: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.storeyes.storeyes_coffee.auth.dto.AuthResponse;
 import io.storeyes.storeyes_coffee.auth.dto.MultiStoreAuthResponse;
+import io.storeyes.storeyes_coffee.auth.dto.UpdateProfileRequest;
 import io.storeyes.storeyes_coffee.auth.dto.UserInfoDTO;
 import io.storeyes.storeyes_coffee.auth.entities.UserInfo;
 import io.storeyes.storeyes_coffee.auth.exceptions.TokenRefreshException;
@@ -41,6 +42,7 @@ public class AuthService {
     private final JwtDecoder jwtDecoder;
     private final ObjectMapper objectMapper;
     private final KeycloakAdminProperties keycloakAdminProperties;
+    private final KeycloakPasswordAdminService keycloakPasswordAdminService;
 
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
     private String keycloakIssuerUri;
@@ -60,12 +62,14 @@ public class AuthService {
             UserInfoRepository userInfoRepository,
             RoleMappingRepository roleMappingRepository,
             JwtDecoder jwtDecoder,
-            KeycloakAdminProperties keycloakAdminProperties) {
+            KeycloakAdminProperties keycloakAdminProperties,
+            KeycloakPasswordAdminService keycloakPasswordAdminService) {
         this.restTemplate = restTemplate;
         this.userInfoRepository = userInfoRepository;
         this.roleMappingRepository = roleMappingRepository;
         this.jwtDecoder = jwtDecoder;
         this.keycloakAdminProperties = keycloakAdminProperties;
+        this.keycloakPasswordAdminService = keycloakPasswordAdminService;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -414,6 +418,43 @@ public class AuthService {
         }
         
         return builder.build();
+    }
+
+    /**
+     * Updates the authenticated user's email/username/firstName/lastName.
+     * Keycloak is the source of truth (updated first via Admin API); the local
+     * {@link UserInfo} mirror is upserted afterwards so {@link #getUserInfo()} stays in sync.
+     *
+     * @throws IllegalStateException if the Keycloak admin API is not configured
+     * @throws HttpClientErrorException (e.g. 409) if Keycloak rejects the update (duplicate email/username)
+     */
+    public UserInfoDTO updateUserInfo(UpdateProfileRequest request) {
+        String userId = KeycloakTokenUtils.getUserId();
+        if (userId == null) {
+            throw new RuntimeException("User is not authenticated");
+        }
+
+        keycloakPasswordAdminService.updateUserProfile(
+                userId,
+                request.getEmail(),
+                request.getUsername(),
+                request.getFirstName(),
+                request.getLastName());
+
+        userInfoRepository.save(UserInfo.builder()
+                .id(userId)
+                .email(request.getEmail())
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .build());
+
+        return UserInfoDTO.builder()
+                .id(userId)
+                .email(request.getEmail())
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .preferredUsername(request.getUsername())
+                .build();
     }
 
     /**

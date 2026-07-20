@@ -86,6 +86,46 @@ public class KeycloakPasswordAdminService {
         }
     }
 
+    /**
+     * Updates email/username/firstName/lastName for a user via the Keycloak Admin API.
+     * Keycloak enforces email/username uniqueness per realm and returns 409 on conflict.
+     */
+    public void updateUserProfile(
+            String keycloakUserId, String email, String username, String firstName, String lastName) {
+        if (!isEnabled()) {
+            throw new IllegalStateException(
+                    notReadyReason().orElse("Keycloak admin API is not configured"));
+        }
+        String base = keycloakServerBase();
+        String usersRealm = resolveUsersRealm();
+        String token = fetchAccessToken(base);
+        String url = base + "/admin/realms/" + usersRealm + "/users/" + keycloakUserId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> entity = new HttpEntity<>(
+                updateProfileJson(email, username, firstName, lastName), headers);
+        try {
+            restTemplate.exchange(url, HttpMethod.PUT, entity, Void.class);
+        } catch (HttpClientErrorException e) {
+            log.warn("Keycloak update-user failed: {} {}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    private String updateProfileJson(String email, String username, String firstName, String lastName) {
+        try {
+            return objectMapper.writeValueAsString(Map.of(
+                    "email", email,
+                    "username", username,
+                    "firstName", firstName,
+                    "lastName", lastName));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Cannot serialize update-profile body", e);
+        }
+    }
+
     private String fetchAccessToken(String base) {
         boolean passwordGrant = adminProperties.usesPasswordGrant();
         String tokenRealm = passwordGrant ? resolvePasswordGrantTokenRealm() : resolveTokenRealm();
