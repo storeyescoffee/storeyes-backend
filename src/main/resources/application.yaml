@@ -85,6 +85,10 @@ app:
       secret: s3RNQkg4DtQPRmAA1olMa3FBjvdEhNd5
     admin-username: ${KEYCLOAK_ADMIN_USERNAME:msahtani}
     admin-password: ${KEYCLOAK_ADMIN_PASSWORD:sahtouta@2025}
+  # Upstream client-gw gateway (panel.storeyes.io) — proxied at /api/client-gw/** by ClientGwProxyController.
+  client-gw:
+    base-url: ${CLIENT_GW_BASE_URL:https://panel.storeyes.io/api/client-gw}
+    api-key: ${CLIENT_GW_API_KEY:CxAIqqW0lZak2baUq85yZKJX}
 
 logging:
   level:
