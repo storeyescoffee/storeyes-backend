@@ -39,6 +39,15 @@ public class ClientGwProxyController {
             // and reject it with 401 before ever looking at X-API-KEY.
             "authorization", "cookie"
     );
+    // panel.storeyes.io sends its own Access-Control-* headers (e.g. "*"). Forwarding those verbatim
+    // stacks a second value alongside this server's own CORS filter response, which browsers reject
+    // ("Access-Control-Allow-Origin contains multiple values"). CORS for this backoffice origin is
+    // this server's job, not the upstream's — strip upstream's CORS headers from the response.
+    private static final Set<String> STRIP_RESPONSE_HEADERS = Set.of(
+            "access-control-allow-origin", "access-control-allow-credentials",
+            "access-control-allow-methods", "access-control-allow-headers",
+            "access-control-expose-headers", "access-control-max-age", "vary"
+    );
 
     private final RestTemplate restTemplate;
     private final ClientGwProperties clientGwProperties;
@@ -66,12 +75,27 @@ public class ClientGwProxyController {
                 : new HttpEntity<>(headers);
 
         try {
-            return restTemplate.exchange(targetUri, HttpMethod.valueOf(request.getMethod()), entity, byte[].class);
+            ResponseEntity<byte[]> response =
+                    restTemplate.exchange(targetUri, HttpMethod.valueOf(request.getMethod()), entity, byte[].class);
+            return ResponseEntity.status(response.getStatusCode())
+                    .headers(stripCorsHeaders(response.getHeaders()))
+                    .body(response.getBody());
         } catch (HttpStatusCodeException e) {
             return ResponseEntity.status(e.getStatusCode())
-                    .headers(e.getResponseHeaders())
+                    .headers(stripCorsHeaders(e.getResponseHeaders()))
                     .body(e.getResponseBodyAsByteArray());
         }
+    }
+
+    private HttpHeaders stripCorsHeaders(HttpHeaders headers) {
+        if (headers == null) return new HttpHeaders();
+        HttpHeaders filtered = new HttpHeaders();
+        headers.forEach((name, values) -> {
+            if (!STRIP_RESPONSE_HEADERS.contains(name.toLowerCase())) {
+                filtered.addAll(name, values);
+            }
+        });
+        return filtered;
     }
 
     private HttpHeaders copyHeaders(HttpServletRequest request) {
