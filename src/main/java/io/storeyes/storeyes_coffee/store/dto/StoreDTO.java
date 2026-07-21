@@ -23,6 +23,7 @@ public class StoreDTO {
     private String type;
     private StoreStatus status;
     private boolean feedbackOnlyMode;
+    private boolean staffOnlyMode;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
