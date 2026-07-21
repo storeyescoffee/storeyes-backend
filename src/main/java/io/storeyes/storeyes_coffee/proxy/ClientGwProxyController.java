@@ -15,8 +15,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.Enumeration;
-import java.util.Set;
 
 /**
  * Raw byte pass-through proxy for the upstream client-gw gateway (panel.storeyes.io), following
@@ -31,23 +29,6 @@ public class ClientGwProxyController {
     private static final String PREFIX = "/api/client-gw";
     private static final String API_KEY_HEADER = "X-API-KEY";
     private static final String STORE_ID_HEADER = "X-STORE-ID";
-    private static final Set<String> HOP_BY_HOP = Set.of(
-            "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
-            "te", "trailers", "transfer-encoding", "upgrade", "host",
-            // client-gw is keyed on X-API-KEY/X-STORE-ID only (no JWT/cookie auth); forwarding this
-            // backoffice's own bearer token makes panel.storeyes.io try to validate it as its own JWT
-            // and reject it with 401 before ever looking at X-API-KEY.
-            "authorization", "cookie"
-    );
-    // panel.storeyes.io sends its own Access-Control-* headers (e.g. "*"). Forwarding those verbatim
-    // stacks a second value alongside this server's own CORS filter response, which browsers reject
-    // ("Access-Control-Allow-Origin contains multiple values"). CORS for this backoffice origin is
-    // this server's job, not the upstream's — strip upstream's CORS headers from the response.
-    private static final Set<String> STRIP_RESPONSE_HEADERS = Set.of(
-            "access-control-allow-origin", "access-control-allow-credentials",
-            "access-control-allow-methods", "access-control-allow-headers",
-            "access-control-expose-headers", "access-control-max-age", "vary"
-    );
 
     private final RestTemplate restTemplate;
     private final ClientGwProperties clientGwProperties;
@@ -65,7 +46,10 @@ public class ClientGwProxyController {
         String qs = request.getQueryString();
         URI targetUri = URI.create(clientGwProperties.getBaseUrl() + targetPath + (qs != null ? "?" + qs : ""));
 
-        HttpHeaders headers = copyHeaders(request);
+        HttpHeaders headers = new HttpHeaders();
+        if (request.getContentType() != null) {
+            headers.set(HttpHeaders.CONTENT_TYPE, request.getContentType());
+        }
         headers.set(API_KEY_HEADER, clientGwProperties.getApiKey());
         headers.set(STORE_ID_HEADER, String.valueOf(CurrentStoreContext.requireCurrentStoreId()));
 
@@ -75,41 +59,11 @@ public class ClientGwProxyController {
                 : new HttpEntity<>(headers);
 
         try {
-            ResponseEntity<byte[]> response =
-                    restTemplate.exchange(targetUri, HttpMethod.valueOf(request.getMethod()), entity, byte[].class);
-            return ResponseEntity.status(response.getStatusCode())
-                    .headers(stripCorsHeaders(response.getHeaders()))
-                    .body(response.getBody());
+            return restTemplate.exchange(targetUri, HttpMethod.valueOf(request.getMethod()), entity, byte[].class);
         } catch (HttpStatusCodeException e) {
             return ResponseEntity.status(e.getStatusCode())
-                    .headers(stripCorsHeaders(e.getResponseHeaders()))
+                    .headers(e.getResponseHeaders())
                     .body(e.getResponseBodyAsByteArray());
         }
-    }
-
-    private HttpHeaders stripCorsHeaders(HttpHeaders headers) {
-        if (headers == null) return new HttpHeaders();
-        HttpHeaders filtered = new HttpHeaders();
-        headers.forEach((name, values) -> {
-            if (!STRIP_RESPONSE_HEADERS.contains(name.toLowerCase())) {
-                filtered.addAll(name, values);
-            }
-        });
-        return filtered;
-    }
-
-    private HttpHeaders copyHeaders(HttpServletRequest request) {
-        HttpHeaders headers = new HttpHeaders();
-        Enumeration<String> names = request.getHeaderNames();
-        if (names == null) return headers;
-        while (names.hasMoreElements()) {
-            String name = names.nextElement();
-            if (HOP_BY_HOP.contains(name.toLowerCase())) continue;
-            Enumeration<String> values = request.getHeaders(name);
-            while (values.hasMoreElements()) {
-                headers.add(name, values.nextElement());
-            }
-        }
-        return headers;
     }
 }
