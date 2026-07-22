@@ -12,5 +12,7 @@ public interface VariableChargeMainCategoryRepository extends JpaRepository<Vari
 
     List<VariableChargeMainCategory> findByStoreIdOrderBySortOrderAsc(Long storeId);
 
+    List<VariableChargeMainCategory> findByStoreIdAndActiveTrueOrderBySortOrderAsc(Long storeId);
+
     Optional<VariableChargeMainCategory> findByStore_IdAndCodeIgnoreCase(Long storeId, String code);
 }

@@ -882,7 +882,7 @@ public class ChargeService {
      */
     public List<VariableChargeMainCategoryResponse> getVariableChargeMainCategories() {
         Long storeId = getChargesDataStoreId();
-        return variableChargeMainCategoryRepository.findByStoreIdOrderBySortOrderAsc(storeId).stream()
+        return variableChargeMainCategoryRepository.findByStoreIdAndActiveTrueOrderBySortOrderAsc(storeId).stream()
                 .map(this::toVariableChargeMainCategoryResponse)
                 .collect(Collectors.toList());
     }
@@ -950,7 +950,9 @@ public class ChargeService {
     }
 
     /**
-     * Delete variable charge main category. Verifies it belongs to the store.
+     * Soft-delete a variable charge main category (deactivate it) so it disappears from
+     * the selectable list while existing variable charges that reference it keep working.
+     * Verifies it belongs to the store.
      * DELETE /api/charges/variable/main-categories/{id}
      */
     @Transactional
@@ -961,7 +963,8 @@ public class ChargeService {
         if (!category.getStore().getId().equals(storeId)) {
             throw new RuntimeException("Variable charge main category not found with id: " + id);
         }
-        variableChargeMainCategoryRepository.deleteById(id);
+        category.setActive(false);
+        variableChargeMainCategoryRepository.save(category);
     }
 
     private VariableChargeMainCategoryResponse toVariableChargeMainCategoryResponse(VariableChargeMainCategory category) {
